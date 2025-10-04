@@ -1,0 +1,188 @@
+\documentclass[11pt]{article}
+
+% --- Margins (similar to ACL) ---
+\usepackage[a4paper,margin=2.5cm]{geometry}
+
+% --- Fonts ---
+\usepackage{times}      % main text font
+\usepackage{latexsym}   % symbols for NLP-style papers
+
+% --- Japanese language support ---
+\usepackage[utf8]{inputenc}
+\usepackage{CJKutf8}
+
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{verbatim}
+\usepackage[square,numbers]{natbib}  % For bibliography management with square brackets
+
+
+% --- Section spacing (ACL style tweaks) ---
+\usepackage{titlesec}
+\titlespacing*{\section}{0pt}{2ex plus 1ex minus .2ex}{1.5ex plus .2ex}
+\titlespacing*{\subsection}{0pt}{1.8ex plus .5ex minus .2ex}{0.8ex plus .2ex}
+\titlespacing*{\subsubsection}{0pt}{1.5ex plus .5ex minus .2ex}{0.5ex plus .2ex}
+
+% --- Caption styling ---
+\usepackage{caption}
+\captionsetup{font=small, labelfont=bf}
+
+\title{Final Project Proposal}
+\author{
+\begin{tabular}{c c c}
+YuChen (Jean) Lin & Pakhi Chatterjee & Aditya Pandey\\
+\texttt{lin.4842@osu.edu} & \texttt{chatterjee.197@osu.edu} & \texttt{pandey.172@osu.edu}
+\end{tabular}
+}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Problem Statement}
+Toxic comment detection models for Japanese are typically trained and evaluated on native-script text (kanji/kana). In practice, social text often appears in romaji (romanized Japanese) for ease of typing, stylistic effect, or to evade filters yet most open models are not evaluated for script invariance. If a model flags \begin{CJK}{UTF8}{min}最低だ\end{CJK} as toxic but misses the semantically identical "saiteida," moderation quality and fairness suffer. Recent Japanese toxicity resources exist, but they focus on native script; a paired, cross-script robustness evaluation is missing. We target that gap by building a lightweight script-invariant toxicity pipeline and a paired testbed that measures label stability when only the script changes. 
+
+\section{Motivation}
+Japan has tightened penalties for online insults in 2022 (can lead to up to one year imprisonment), so reliable moderation in Japanese is not just academic policy talk. Yet moderation quality is very uneven outside of English, with evidence of under-investment and missing language expertise across platforms, implying that harmful content can slip through when it is not written in the native language. In practice, romaji appears constantly because the standard Japanese IME accepts romaji keystrokes and converts them to kana/kanji, so Romanized surface forms are routine and should be treated as first-class inputs.  
+
+\section{Research Gap}
+Japanese toxicity datasets such as LLM-jp's Japanese Toxicity Dataset (v2) support safer LLMs by providing strong native-script supervision but do not benchmark rōmaji robustness, and although we are considering additional datasets for more information, none has been finalized. Industry work on Japanese toxicity modeling explores efficient toxic language detection for real-world settings and underscores deployment needs but similarly overlooks script invariance. Dedicated studies on Roman Urdu hate speech demonstrate that romanization is treated as a real failure mode and provide a useful precedent \cite{mathur2020hateval}, and a recent Nature report on multilingual toxicity detection highlights the necessity of script-agnostic robustness \cite{nature2024multilingual}. Yet no equivalent work focuses on Japanese rōmaji. This project fills that gap by creating a Japanese rōmaji-robust toxicity benchmark. Consequently, there is a critical need for establishing a standardized benchmark to measure how well toxicity classifiers handle Japanese text when presented in romanized form.
+
+
+\section{Technical Resources and Datasets}
+\subsection{Models}
+\begin{itemize}
+\item BERT-base-multilingual-cased (Hugging Face)
+\item XLM-RoBERTa-base (Hugging Face)
+\end{itemize}
+
+\subsection{Training Datasets}
+\begin{itemize}
+\item inspection-ai/japanese-toxic-dataset \cite{inspection2024japanese}: Contains native Japanese text with toxicity level annotations 
+\item llm-jp-toxicity-dataset \cite{llmjp2024toxicity}: Japanese toxicity dataset with LLM‐provided quality assessments and statistics 
+\item Japanese LLM Safety dataset \cite{japanese2024safety}: Comprehensive safety evaluation dataset for Japanese language models
+\end{itemize} 
+
+\subsection{Romanization Pipeline}
+pykakasi (v2.2+) \cite{pykakasi2024} for reliable Japanese-to-romaji conversion using Hepburn romanization standard 
+
+\subsection{Compute Resources}
+\begin{itemize}
+\item Single GPU instance (e.g., NVIDIA V100, 16 GB) 
+\item Python 3.9, PyTorch, Hugging Face Transformers
+\end{itemize}
+
+\section{Proposed Approach}
+\subsection{Data Preprocessing and Validation}
+\begin{itemize}
+\item Convert Japanese datasets to romaji using pykakasi with Hepburn romanization 
+\item Manually inspect 200 random samples; record and fix conversion errors (e.g., loanwords, long vowels)
+\item Create train/validation/test splits (70/15/15) maintaining toxicity level distribution 
+\item Produce summary statistics: token counts, class distributions
+\end{itemize}
+
+\subsection{Model Fine-tuning}
+\begin{itemize}
+\item Fine-tune BERT-base-multilingual and XLM-RoBERTa-base on romanized Japanese toxicity data 
+\item Implement stratified sampling on Romanized Japanese to address potential class imbalance 
+\item Use standard hyperparameters: learning rate (e.g. 2e-5), batch size (e.g. 16), (e.g. 3-5) epochs with early stopping 
+\item Apply cross-validation to ensure robust performance estimates
+\end{itemize} 
+
+\section{Evaluation}
+\subsection{Classification Performance}
+\begin{itemize}
+\item F1\_native: Precision, Recall, and F1-score on the held-out native-script test set (per level and macro-averaged)
+\item F1\_romaji: Precision, Recall, and F1-score on the held-out romaji test set (per level and macro-averaged)
+\end{itemize}
+
+\subsection{Script-Invariance Gap}
+\begin{itemize}
+\item ΔF1 = F1\_native − F1\_romaji for each toxicity level; report mean ΔF1 and 95\% confidence interval
+\item Label Consistency Rate: Percentage of test samples whose predicted label is identical in native and romaji versions
+\end{itemize}
+
+\subsection{Statistical Significance}
+\begin{itemize}
+\item McNemar's Test: Conduct McNemar's test on paired native versus romaji predictions to determine if the difference in error rates is statistically significant
+\end{itemize}
+
+\subsection{Robustness to Romanization Variants}
+\begin{itemize}
+\item For each common perturbation (long-vowel representation, gemination, numeric leet), compute ΔF1\_variant = F1\_romaji − F1\_variant; report mean and standard deviation
+\end{itemize}
+
+\subsection{Error Analysis on Romanized Inputs}
+\begin{itemize}
+\item High-ΔF1 Case Review: Manually examine the top 50 samples with the largest native–romaji F1 discrepancy to identify systematic romanization failure modes
+\end{itemize}
+
+\subsection{Efficiency Metrics for Deployment (Optional)}
+\begin{itemize}
+\item Inference latency (ms/sample) and throughput (samples/s) on GPU and CPU
+\item Peak GPU memory usage during batch inference
+\end{itemize} 
+
+\section{Expected Outcomes}
+\begin{itemize}
+\item A paired, script-controlled benchmark for Japanese toxicity detection
+\item A drop-in training recipe (romanization + consistency loss) that reduces flip rate without sacrificing F1
+\item Reproducible code and dataset construction scripts for future Japanese moderation research (and portability to other languages with romanization)
+\end{itemize} 
+
+\section{Timeline}
+\begin{itemize}
+\item \textbf{W1:} Set up data access + build/verify rōmaji conversion pipeline (paired prototype)
+\item \textbf{W2:} Train baselines (native, rōmaji, mixed) and wire up F1/AUROC/Flip Rate
+\item \textbf{W3:} Implement dual-view consistency loss and run first script-invariant model
+\item \textbf{W4:} Hyperparameter sweep ($\lambda$, LoRA rank) and apply temperature scaling (ECE/Brier)
+\item \textbf{W5:} Run ablations and slice/error analysis (emoji, elongations, mixed-script, length)
+\item \textbf{W6:} Finalize results, package code/data, and prepare write-up + slides
+\end{itemize} 
+
+\begin{thebibliography}{9}
+
+\bibitem{mathur2020hateval}
+Mathur, P., Shah, R., Sawhney, R., \& Mahata, D. (2020). 
+\textit{HatEval Shared Task: Detection and Classification of Hate Speech in a Multilingual Setting}.
+Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (EMNLP).
+\url{https://aclanthology.org/2020.emnlp-main.197}
+
+\bibitem{nature2024multilingual}
+Nature Scientific Reports (2024). 
+\textit{Multilingual toxicity detection highlights the necessity of script-agnostic robustness}.
+Scientific Reports, Article number: s41598-024-79106-7.
+\url{https://www.nature.com/articles/s41598-024-79106-7}
+
+\bibitem{llmjp2024toxicity}
+LLM-jp Consortium (2024).
+\textit{Japanese Toxicity Dataset v2}.
+\url{https://gitlab.llm-jp.nii.ac.jp/datasets/llm-jp-toxicity-dataset-v2}
+
+\bibitem{inspection2024japanese}
+Inspection AI (2024).
+\textit{Japanese Toxic Dataset}.
+\url{https://github.com/inspection-ai/japanese-toxic-dataset}
+
+\bibitem{japanese2024safety}
+Japanese LLM Safety Research Group (2024).
+\textit{Japanese LLM Safety Dataset}.
+arXiv preprint arXiv:2506.02372.
+\url{https://arxiv.org/abs/2506.02372}
+
+\bibitem{pykakasi2024}
+pykakasi Development Team (2024).
+\textit{pykakasi: Japanese text transliteration library}.
+\url{https://pypi.org/project/pykakasi}
+
+\bibitem{emnlp2022industry}
+EMNLP Industry Track (2022).
+\textit{Japanese toxicity modeling in practice}.
+\url{https://aclanthology.org/2022.emnlp-industry.58.pdf}
+
+\end{thebibliography} 
+
+\end{document}
