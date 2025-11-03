@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Simple inference script for BERT toxicity classification.
+Simple inference script for transformer-based toxicity classification.
+Supports both BERT and XLM-RoBERTa models.
 Test trained model on new texts or evaluate on test data.
 
 Usage:
@@ -14,7 +15,7 @@ import torch
 import json
 import os
 from transformers import AutoTokenizer
-from bert_toxicity import SimpleBertClassifier, predict_text, load_data, SimpleToxicityDataset
+from utils import SimpleBertClassifier, predict_text, load_data, SimpleToxicityDataset
 from torch.utils.data import DataLoader
 import logging
 
@@ -163,7 +164,7 @@ def evaluate_on_test_data(model, tokenizer, device, data_path, use_romaji=False)
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Inference with trained BERT toxicity classifier')
+    parser = argparse.ArgumentParser(description='Inference with trained transformer toxicity classifier')
     
     parser.add_argument('--model', type=str, required=True,
                        help='Path to saved model file (.pt)')

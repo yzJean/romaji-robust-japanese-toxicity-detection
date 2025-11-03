@@ -5,6 +5,9 @@ Quick verification of model training flow.
 
 Usage:
     python3 train.py --quick-test                    # Quick verification: 50 samples, 1 epoch
+    python3 train.py --xlm-roberta --quick-test      # Quick test with XLM-RoBERTa
+    python3 train.py --model-type bert               # Use BERT model
+    python3 train.py --model-type xlm-roberta        # Use XLM-RoBERTa model
     python3 train.py --sample-size 100               # Use only 100 training samples  
     python3 train.py --sample-size 200 --epochs 2    # 200 samples, 2 epochs
     python3 train.py --use-romaji                     # Full dataset with romaji
@@ -15,7 +18,7 @@ import argparse
 import torch
 import logging
 import numpy as np
-from bert_toxicity import (
+from utils import (
     load_data, SimpleToxicityDataset, SimpleBertClassifier, SimpleTrainer
 )
 from transformers import AutoTokenizer
@@ -33,10 +36,12 @@ def parse_args():
     parser.add_argument('--data-path', type=str, 
                        default='data/processed/paired_inspection_ai_binary.csv',
                        help='Path to the paired CSV data file')
+
+    parser.add_argument('--model-type', type=str, choices=['bert', 'xlm-roberta'],
+                       help='Quick model selection: bert or xlm-roberta')
     
-    parser.add_argument('--model-name', type=str,
-                       default='google-bert/bert-base-multilingual-cased',
-                       help='BERT model name from HuggingFace')
+    parser.add_argument('--xlm-roberta', action='store_true',
+                       help='Use XLM-RoBERTa model (shortcut for FacebookAI/xlm-roberta-base)')
     
     parser.add_argument('--use-romaji', action='store_true',
                        help='Use romanized text instead of native Japanese')
@@ -80,6 +85,20 @@ def main():
     # Device setup
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger.info(f"Using device: {device}")
+    
+    # Model selection logic
+    if args.xlm_roberta or args.model_type == 'xlm-roberta':
+        args.model_name = 'FacebookAI/xlm-roberta-base'
+        logger.info("Selected XLM-RoBERTa model")
+    elif args.model_type == 'bert':
+        args.model_name = 'google-bert/bert-base-multilingual-cased'
+        logger.info("Selected BERT model")
+    else:
+        # Default to BERT if no model specified
+        args.model_name = 'google-bert/bert-base-multilingual-cased'
+        logger.info("Selected BERT model (default)")
+    
+    logger.info(f"Using model: {args.model_name}")
     
     # Check data file exists
     if not os.path.exists(args.data_path):
@@ -157,7 +176,9 @@ def main():
         # Save best model
         if val_acc > best_val_acc:
             best_val_acc = val_acc
-            model_path = os.path.join(args.output_dir, 'best_model.pt')
+            # Create safe filename from model name
+            safe_model_name = args.model_name.replace('/', '_').replace('-', '_')
+            model_path = os.path.join(args.output_dir, f'{safe_model_name}_best_model.pt')
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'tokenizer_name': args.model_name,
@@ -196,7 +217,9 @@ def main():
     }
     
     import json
-    results_path = os.path.join(args.output_dir, 'results.json')
+    # Create safe filename from model name
+    safe_model_name = args.model_name.replace('/', '_').replace('-', '_')
+    results_path = os.path.join(args.output_dir, f'{safe_model_name}_results.json')
     with open(results_path, 'w') as f:
         # Convert numpy arrays to lists for JSON serialization
         json_results = {k: v.tolist() if hasattr(v, 'tolist') else v for k, v in results.items()}
@@ -205,7 +228,7 @@ def main():
     logger.info(f"Results saved to {results_path}")
     
     # Save configuration
-    config_path = os.path.join(args.output_dir, 'config.json')
+    config_path = os.path.join(args.output_dir, f'{safe_model_name}_config.json')
     with open(config_path, 'w') as f:
         json.dump(vars(args), f, indent=2)
     

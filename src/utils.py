@@ -1,6 +1,6 @@
 """
-Simple BERT-based Japanese toxicity classifier.
-Designed for quick verification of training and inference flow.
+Transformer-based Japanese toxicity classification utilities.
+Supports BERT and XLM-RoBERTa models for quick verification of training and inference flow.
 """
 
 import torch
@@ -54,19 +54,30 @@ class SimpleToxicityDataset(Dataset):
 
 
 class SimpleBertClassifier(nn.Module):
-    """Simple BERT classifier for binary toxicity detection."""
+    """Simple transformer classifier for binary toxicity detection.
+    Supports both BERT and XLM-RoBERTa models."""
     
     def __init__(self, model_name: str = "google-bert/bert-base-multilingual-cased", dropout: float = 0.1):
         super().__init__()
         
-        self.bert = AutoModel.from_pretrained(model_name)
+        self.model_name = model_name
+        self.transformer = AutoModel.from_pretrained(model_name)
         self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(self.bert.config.hidden_size, 2)  # Binary classification
+        self.classifier = nn.Linear(self.transformer.config.hidden_size, 2)  # Binary classification
         
-        logger.info(f"Model initialized with {model_name}")
+        # Determine model type for logging
+        if "xlm-roberta" in model_name.lower():
+            model_type = "XLM-RoBERTa"
+        elif "bert" in model_name.lower():
+            model_type = "BERT"
+        else:
+            model_type = "Transformer"
+            
+        logger.info(f"{model_type} model initialized with {model_name}")
+        logger.info(f"Hidden size: {self.transformer.config.hidden_size}")
     
     def forward(self, input_ids, attention_mask):
-        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+        outputs = self.transformer(input_ids=input_ids, attention_mask=attention_mask)
         
         # Use [CLS] token representation
         pooled_output = outputs.last_hidden_state[:, 0, :]
