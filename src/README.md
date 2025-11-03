@@ -1,12 +1,13 @@
-# BERT Toxicity Classification
+# Multi-Model Toxicity Classification
 
-This is a focused implementation for BERT model training and inference on Japanese toxicity classification. It works directly with the existing processed data for quick verification and experimentation.
+This is a focused implementation for transformer-based model training and inference on Japanese toxicity classification. It supports both BERT and XLM-RoBERTa models and works directly with the existing processed data for quick verification and experimentation.
 
 ## Files
 
 - `utils.py` - Core model and utilities (SimpleBertClassifier, SimpleTrainer, load_data, predict_text)
-- `train.py` - Training script with support for sample size limiting and quick testing
+- `train.py` - Training script with multi-model support, sample size limiting and quick testing
 - `inference.py` - Inference and evaluation script with interactive mode
+- `compare_models.py` - Model comparison utility for BERT vs XLM-RoBERTa
 - `explore_data.py` - Data exploration and analysis utility
 
 ## Quick Start
@@ -41,60 +42,94 @@ python3 explore_data.py
 
 ### 4. Train Model
 
-Quick verification (recommended first):
+Quick verification with BERT (recommended first):
 ```bash
 python3 train.py --quick-test
 ```
 
-Basic training (native Japanese text):
+Train BERT model:
 ```bash
-python3 train.py
+python3 train.py --model-type bert --epochs 10
+```
+
+Train XLM-RoBERTa model:
+```bash
+python3 train.py --model-type xlm-roberta --epochs 10
+```
+
+Quick test with XLM-RoBERTa:
+```bash
+python3 train.py --xlm-roberta --quick-test
 ```
 
 Train with limited samples for faster experimentation:
 ```bash
-python3 train.py --sample-size 100
-python3 train.py --sample-size 200 --epochs 2
+python3 train.py --model-type bert --sample-size 100
+python3 train.py --model-type xlm-roberta --sample-size 200 --epochs 2
 ```
 
 Train with romanized text:
 ```bash
-python3 train.py --use-romaji
+python3 train.py --model-type bert --use-romaji
+python3 train.py --model-type xlm-roberta --use-romaji
 ```
 
 Custom training parameters:
 ```bash
-python3 train.py --epochs 5 --batch-size 32 --learning-rate 3e-5
+python3 train.py --model-type bert --epochs 5 --batch-size 32 --learning-rate 3e-5
+python3 train.py --model-type xlm-roberta --epochs 5 --batch-size 32 --learning-rate 2e-5
+```
+
+Compare both models:
+```bash
+python3 compare_models.py --quick-test
+python3 compare_models.py --epochs 5 --sample-size 500
 ```
 
 ### 5. Run Inference
 
-Test single text:
+Test single text with BERT model:
 ```bash
-python3 inference.py --model outputs/best_model.pt --text "ありがとう"
+python3 inference.py --model outputs/google_bert_bert_base_multilingual_cased_best_model.pt --text "ありがとう"
+```
+
+Test single text with XLM-RoBERTa model:
+```bash
+python3 inference.py --model outputs/FacebookAI_xlm_roberta_base_best_model.pt --text "ありがとう"
 ```
 
 Interactive mode (recommended for testing):
 ```bash
-python3 inference.py --model outputs/best_model.pt --interactive
+python3 inference.py --model outputs/google_bert_bert_base_multilingual_cased_best_model.pt --interactive
+python3 inference.py --model outputs/FacebookAI_xlm_roberta_base_best_model.pt --interactive
 ```
 
 Evaluate on test data:
 ```bash
-python3 inference.py --model outputs/best_model.pt --evaluate
+python3 inference.py --model outputs/google_bert_bert_base_multilingual_cased_best_model.pt --evaluate
+python3 inference.py --model outputs/FacebookAI_xlm_roberta_base_best_model.pt --evaluate
 ```
 
 Batch inference from file:
 ```bash
-python3 inference.py --model outputs/best_model.pt --texts-file sample_texts.txt
+python3 inference.py --model outputs/google_bert_bert_base_multilingual_cased_best_model.pt --texts-file sample_texts.txt
+python3 inference.py --model outputs/FacebookAI_xlm_roberta_base_best_model.pt --texts-file sample_texts.txt
 ```
+
+## Supported Models
+
+| Model | Identifier | Usage |
+|-------|------------|-------|
+| **BERT Multilingual** | `google-bert/bert-base-multilingual-cased` | `--model-type bert` (default) |
+| **XLM-RoBERTa** | `FacebookAI/xlm-roberta-base` | `--model-type xlm-roberta` or `--xlm-roberta` |
 
 ## Model Architecture
 
-- Base model: `google-bert/bert-base-multilingual-cased`
-- Binary classification (Non-Toxic vs Toxic)
-- Uses [CLS] token representation with dropout and linear classifier
-- Supports both native Japanese and romanized text
+- **Architecture**: Transformer encoder with classification head
+- **Classification**: Binary classification (Non-Toxic vs Toxic)
+- **Token Representation**: Uses [CLS] token representation with dropout and linear classifier
+- **Text Support**: Supports both native Japanese and romanized text
+- **Model Selection**: Automatic model loading based on HuggingFace identifiers
 
 ## Training Details
 
@@ -108,11 +143,20 @@ python3 inference.py --model outputs/best_model.pt --texts-file sample_texts.txt
 
 ## Output
 
-Training creates:
-- `outputs/best_model.pt` - Saved model checkpoint (includes model state, tokenizer info, config)
-- `outputs/results.json` - Training metrics and evaluation results
-- `outputs/config.json` - Training configuration
-- `outputs/training.log` - Detailed training logs
+Training creates model-specific files:
+
+**For BERT model:**
+- `outputs/google_bert_bert_base_multilingual_cased_best_model.pt` - BERT model checkpoint
+- `outputs/google_bert_bert_base_multilingual_cased_results.json` - BERT training results
+- `outputs/google_bert_bert_base_multilingual_cased_config.json` - BERT training configuration
+
+**For XLM-RoBERTa model:**
+- `outputs/FacebookAI_xlm_roberta_base_best_model.pt` - XLM-RoBERTa model checkpoint
+- `outputs/FacebookAI_xlm_roberta_base_results.json` - XLM-RoBERTa training results
+- `outputs/FacebookAI_xlm_roberta_base_config.json` - XLM-RoBERTa training configuration
+
+**For model comparison:**
+- `outputs/comparison/model_comparison.json` - Side-by-side comparison results
 
 Model checkpoint contains:
 - `model_state_dict` - PyTorch model weights
@@ -124,6 +168,8 @@ Model checkpoint contains:
 ## Command Line Arguments
 
 ### Training Arguments
+- `--model-type {bert,xlm-roberta}` - Choose model type (bert is default)
+- `--xlm-roberta` - Shortcut to use XLM-RoBERTa model
 - `--quick-test` - Quick verification: 50 samples, 1 epoch
 - `--sample-size N` - Use only N training samples
 - `--use-romaji` - Use romanized text instead of native Japanese
@@ -133,12 +179,44 @@ Model checkpoint contains:
 - `--data-path PATH` - Path to CSV data file
 - `--output-dir DIR` - Output directory (default: outputs)
 
+### Model Comparison Arguments
+- `--quick-test` - Quick comparison: 100 samples, 2 epochs per model
+- `--sample-size N` - Use N training samples for each model
+- `--use-romaji` - Compare models on romanized text
+- `--epochs N` - Number of epochs for each model (default: 3)
+- `--output-dir DIR` - Directory to save comparison results
+
 ### Inference Arguments
-- `--model PATH` - Path to saved model (required)
+- `--model PATH` - Path to saved model checkpoint (required)
 - `--text "TEXT"` - Single text to classify
-- `--interactive` - Interactive mode
-- `--evaluate` - Evaluate on test data
+- `--interactive` - Interactive mode for testing multiple texts
+- `--evaluate` - Evaluate model performance on test data
 - `--texts-file PATH` - File with texts to classify (one per line)
+- `--use-romaji` - Use romanized text (must match training setting)
+
+## Model Comparison
+
+Compare BERT and XLM-RoBERTa performance:
+
+```bash
+# Quick comparison (recommended first)
+python3 compare_models.py --quick-test
+
+# Full comparison
+python3 compare_models.py --epochs 5
+
+# Compare with specific sample size
+python3 compare_models.py --sample-size 300 --epochs 3
+
+# Compare on romanized text
+python3 compare_models.py --use-romaji --quick-test
+```
+
+The comparison script will:
+- Train both models with identical settings
+- Show side-by-side performance metrics
+- Highlight the best performing model
+- Save detailed results to `outputs/comparison/model_comparison.json`
 
 ## Example Usage in Code
 
@@ -147,22 +225,35 @@ from utils import SimpleBertClassifier, predict_text
 from transformers import AutoTokenizer
 import torch
 
-# Load model with proper error handling
+# Load BERT model
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-checkpoint = torch.load('outputs/best_model.pt', map_location=device, weights_only=False)
+bert_checkpoint = torch.load('outputs/google_bert_bert_base_multilingual_cased_best_model.pt',
+                            map_location=device, weights_only=False)
 
-tokenizer = AutoTokenizer.from_pretrained(checkpoint['tokenizer_name'])
-model = SimpleBertClassifier(checkpoint['tokenizer_name'])
-model.load_state_dict(checkpoint['model_state_dict'])
-model.to(device)
-model.eval()
+bert_tokenizer = AutoTokenizer.from_pretrained(bert_checkpoint['tokenizer_name'])
+bert_model = SimpleBertClassifier(bert_checkpoint['tokenizer_name'])
+bert_model.load_state_dict(bert_checkpoint['model_state_dict'])
+bert_model.to(device)
+bert_model.eval()
 
-# Predict single text
-result = predict_text(model, tokenizer, "バカ野郎", device)
-print(f"Text: {result['text']}")
-print(f"Prediction: {result['prediction']}")
-print(f"Confidence: {result['confidence']:.3f}")
-print(f"Toxic Probability: {result['toxic_probability']:.3f}")
+# Load XLM-RoBERTa model
+xlm_checkpoint = torch.load('outputs/FacebookAI_xlm_roberta_base_best_model.pt',
+                           map_location=device, weights_only=False)
+
+xlm_tokenizer = AutoTokenizer.from_pretrained(xlm_checkpoint['tokenizer_name'])
+xlm_model = SimpleBertClassifier(xlm_checkpoint['tokenizer_name'])
+xlm_model.load_state_dict(xlm_checkpoint['model_state_dict'])
+xlm_model.to(device)
+xlm_model.eval()
+
+# Compare predictions
+text = "バカ野郎"
+bert_result = predict_text(bert_model, bert_tokenizer, text, device)
+xlm_result = predict_text(xlm_model, xlm_tokenizer, text, device)
+
+print(f"Text: {text}")
+print(f"BERT: {bert_result['prediction']} ({bert_result['confidence']:.3f})")
+print(f"XLM-RoBERTa: {xlm_result['prediction']} ({xlm_result['confidence']:.3f})")
 ```
 
 ## Data Format
@@ -188,18 +279,28 @@ The implementation expects CSV data with these columns:
 - ~1-2GB RAM for dataset loading
 
 ### Expected Accuracy
+
+**BERT Multilingual:**
 - **Quick test**: 70-80% (limited by small data)
 - **Small dataset**: 80-85%
 - **Full dataset**: 85-90%
 
-**Note**: If you see 90%+ accuracy but 0% precision/recall on toxic class, your model is likely predicting only non-toxic. This is common with imbalanced small datasets.
+**XLM-RoBERTa:**
+- **Quick test**: 70-85% (often slightly better than BERT)
+- **Small dataset**: 82-87%
+- **Full dataset**: 87-92%
+
+**Note**: If you see 90%+ accuracy but 0% precision/recall on toxic class, your model is likely predicting only non-toxic. This is common with imbalanced small datasets. XLM-RoBERTa typically performs better on multilingual tasks.
 
 ## Troubleshooting
 
 ### Model Always Predicts Non-Toxic
 ```bash
-# Use more training data
-python3 train.py --sample-size 200 --epochs 5
+# Use more training data with BERT
+python3 train.py --model-type bert --sample-size 200 --epochs 5
+
+# Try XLM-RoBERTa (often better on imbalanced data)
+python3 train.py --model-type xlm-roberta --sample-size 200 --epochs 5
 
 # Check data distribution
 python3 explore_data.py
@@ -207,11 +308,14 @@ python3 explore_data.py
 
 ### Low Accuracy on Toxic Class
 ```bash
-# Try different learning rate
-python3 train.py --learning-rate 1e-5 --epochs 10
+# Try different learning rate with BERT
+python3 train.py --model-type bert --learning-rate 1e-5 --epochs 10
 
-# Use full dataset
-python3 train.py --epochs 5
+# Try XLM-RoBERTa with full dataset
+python3 train.py --model-type xlm-roberta --epochs 5
+
+# Compare both models
+python3 compare_models.py --epochs 5
 ```
 
 ### PyTorch Loading Errors
