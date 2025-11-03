@@ -45,9 +45,5 @@ urllib3==2.5.0
 wrapt==2.0.0
 xxhash==3.6.0
 yarl==1.22.0
-
-# Added for BERT toxicity classification
-torch>=2.0.0
-scikit-learn>=1.3.0
-matplotlib>=3.5.0
-seaborn>=0.11.0
+scikit-learn==1.5.2
+matplotlib==3.9.3
