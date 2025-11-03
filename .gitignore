@@ -2,3 +2,5 @@ latex_build/*
 *.aux
 *.DS_Store
 .venv/
+src/__pycache__/*
+outputs/*
