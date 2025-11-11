@@ -13,8 +13,8 @@ def to_romaji(s):
     return k.getConverter().do(s)
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--infile",  required=True)     # data/standardized/inspection_ai.csv
-ap.add_argument("--outfile", required=True)     # data/processed/paired_inspection_ai_binary.csv
+ap.add_argument("--infile",  required=True)     # data/standardized/*.csv
+ap.add_argument("--outfile", required=True)     # data/processed/paired_native_romaji_*_binary.csv
 args = ap.parse_args()
 
 rows = []

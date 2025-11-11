@@ -105,7 +105,7 @@ COARSE_MAP = {"Not Toxic":"NonToxic", "Hard to Say":"Ambiguous", "Toxic":"Toxic"
 python scripts/load_data.py --inspection data/raw/inspection_ai/labels.csv   --out data/standardized/inspection_ai.csv
 
 # LLM‑jp v2 → standardized CSV
-python scripts/load_data.py --llmjp data/raw/llmjp/toxicity_dataset_v2.jsonl   --out data/standardized/llmjp.csv
+python scripts/load_data.py --llmjp data/raw/llmjp/toxicity_dataset.jsonl   --out data/standardized/llmjp.csv
 ```
 
 ---
