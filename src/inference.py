@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Simple inference script for transformer-based toxicity classification.
-Supports both BERT and XLM-RoBERTa models.
+Supports mDeBERTa-v3 and BERT Japanese models.
 Test trained model on new texts or evaluate on test data.
 
 Usage:

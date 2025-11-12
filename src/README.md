@@ -1,13 +1,13 @@
 # Multi-Model Toxicity Classification
 
-This is a focused implementation for transformer-based model training and inference on Japanese toxicity classification. It supports both BERT and XLM-RoBERTa models and works directly with the existing processed data for quick verification and experimentation.
+This is a focused implementation for transformer-based model training and inference on Japanese toxicity classification. It supports mDeBERTa-v3 and BERT Japanese models and works directly with the existing processed data for quick verification and experimentation.
 
 ## Files
 
 - `utils.py` - Core model and utilities (SimpleBertClassifier, SimpleTrainer, load_data, predict_text)
-- `train.py` - Training script with multi-model support, sample size limiting and quick testing
+- `train.py` - Training script with multi-model support, sample size limiting, quick testing, and gradient accumulation
 - `inference.py` - Inference and evaluation script with interactive mode
-- `compare_models.py` - Model comparison utility for BERT vs XLM-RoBERTa
+- `compare_models.py` - Model comparison utility for mDeBERTa-v3 vs BERT Japanese
 - `explore_data.py` - Data exploration and analysis utility
 
 ## Quick Start
@@ -15,7 +15,19 @@ This is a focused implementation for transformer-based model training and infere
 ### 1. Install Dependencies
 
 ```bash
-pip install torch scikit-learn matplotlib seaborn
+pip install torch scikit-learn matplotlib seaborn transformers
+```
+
+**Model-specific dependencies:**
+
+For **mDeBERTa** model:
+```bash
+pip install sentencepiece tiktoken protobuf
+```
+
+For **BERT Japanese** model:
+```bash
+pip install fugashi unidic-lite
 ```
 
 Or install all requirements:
@@ -25,12 +37,17 @@ pip install -r requirements.txt
 
 ### 2. Prepare Data
 
-Ensure you have the processed data file:
+Ensure you have the processed data file. The default path is:
 ```
-data/processed/paired_inspection_ai_binary.csv
+data/processed/paired_native_romaji_inspection_ai_binary.csv
 ```
 
-This should contain columns: `id`, `text_native`, `text_romaji`, `label_int_coarse`, `label_text_fine`, `source`
+Other supported data files:
+```
+data/processed/paired_native_romaji_llmjp_binary.csv
+```
+
+Expected columns: `text_native`, `text_romaji`, `label_int_coarse`
 
 ### 3. Explore Your Data (Optional)
 
@@ -42,42 +59,50 @@ python3 explore_data.py
 
 ### 4. Train Model
 
-Quick verification with BERT (recommended first):
+Quick verification with mDeBERTa (default):
 ```bash
 python3 train.py --quick-test
 ```
 
-Train BERT model:
+Quick test with BERT Japanese:
 ```bash
-python3 train.py --model-type bert --epochs 10
+python3 train.py --model-type bert-japanese --quick-test
 ```
 
-Train XLM-RoBERTa model:
+Train mDeBERTa model:
 ```bash
-python3 train.py --model-type xlm-roberta --epochs 10
+python3 train.py --model-type mdeberta --epochs 10
 ```
 
-Quick test with XLM-RoBERTa:
+Train BERT Japanese model:
 ```bash
-python3 train.py --xlm-roberta --quick-test
+python3 train.py --model-type bert-japanese --epochs 10
+```
+
+**Memory optimization for GPU:**
+
+If you encounter out-of-memory errors, reduce batch size:
+```bash
+python3 train.py --model-type mdeberta --epochs 10 --batch-size 8
+python3 train.py --model-type mdeberta --epochs 10 --batch-size 4
 ```
 
 Train with limited samples for faster experimentation:
 ```bash
-python3 train.py --model-type bert --sample-size 100
-python3 train.py --model-type xlm-roberta --sample-size 200 --epochs 2
+python3 train.py --model-type mdeberta --sample-size 100
+python3 train.py --model-type bert-japanese --sample-size 200 --epochs 2
 ```
 
 Train with romanized text:
 ```bash
-python3 train.py --model-type bert --use-romaji
-python3 train.py --model-type xlm-roberta --use-romaji
+python3 train.py --model-type mdeberta --use-romaji
+python3 train.py --model-type bert-japanese --use-romaji
 ```
 
 Custom training parameters:
 ```bash
-python3 train.py --model-type bert --epochs 5 --batch-size 32 --learning-rate 3e-5
-python3 train.py --model-type xlm-roberta --epochs 5 --batch-size 32 --learning-rate 2e-5
+python3 train.py --model-type mdeberta --epochs 5 --batch-size 32 --learning-rate 3e-5
+python3 train.py --model-type bert-japanese --epochs 5 --batch-size 32 --learning-rate 2e-5
 ```
 
 Compare both models:
@@ -88,40 +113,55 @@ python3 compare_models.py --epochs 5 --sample-size 500
 
 ### 5. Run Inference
 
-Test single text with BERT model:
+Test single text with mDeBERTa model:
 ```bash
-python3 inference.py --model outputs/google_bert_bert_base_multilingual_cased_best_model.pt --text "ありがとう"
+python3 src/inference.py --model outputs/microsoft_mdeberta_v3_base_best_model.pt --text "ありがとう"
 ```
 
-Test single text with XLM-RoBERTa model:
+Test single text with BERT Japanese model:
 ```bash
-python3 inference.py --model outputs/FacebookAI_xlm_roberta_base_best_model.pt --text "ありがとう"
+python3 src/inference.py --model outputs/tohoku_nlp_bert_base_japanese_v3_best_model.pt --text "ありがとう"
 ```
 
 Interactive mode (recommended for testing):
 ```bash
-python3 inference.py --model outputs/google_bert_bert_base_multilingual_cased_best_model.pt --interactive
-python3 inference.py --model outputs/FacebookAI_xlm_roberta_base_best_model.pt --interactive
+python3 src/inference.py --model outputs/microsoft_mdeberta_v3_base_best_model.pt --interactive
+python3 src/inference.py --model outputs/tohoku_nlp_bert_base_japanese_v3_best_model.pt --interactive
 ```
 
 Evaluate on test data:
 ```bash
-python3 inference.py --model outputs/google_bert_bert_base_multilingual_cased_best_model.pt --evaluate
-python3 inference.py --model outputs/FacebookAI_xlm_roberta_base_best_model.pt --evaluate
+python3 src/inference.py --model outputs/microsoft_mdeberta_v3_base_best_model.pt --evaluate
+python3 src/inference.py --model outputs/tohoku_nlp_bert_base_japanese_v3_best_model.pt --evaluate
 ```
 
 Batch inference from file:
 ```bash
-python3 inference.py --model outputs/google_bert_bert_base_multilingual_cased_best_model.pt --texts-file sample_texts.txt
-python3 inference.py --model outputs/FacebookAI_xlm_roberta_base_best_model.pt --texts-file sample_texts.txt
+python3 src/inference.py --model outputs/microsoft_mdeberta_v3_base_best_model.pt --texts-file sample_texts.txt
+python3 src/inference.py --model outputs/tohoku_nlp_bert_base_japanese_v3_best_model.pt --texts-file sample_texts.txt
 ```
 
 ## Supported Models
 
-| Model | Identifier | Usage |
-|-------|------------|-------|
-| **BERT Multilingual** | `google-bert/bert-base-multilingual-cased` | `--model-type bert` (default) |
-| **XLM-RoBERTa** | `FacebookAI/xlm-roberta-base` | `--model-type xlm-roberta` or `--xlm-roberta` |
+| Model | Identifier | Usage | Best For |
+|-------|------------|-------|----------|
+| **mDeBERTa-v3** | `microsoft/mdeberta-v3-base` | `--model-type mdeberta` (default) | Multilingual text, romaji support |
+| **BERT Japanese** | `tohoku-nlp/bert-base-japanese-v3` | `--model-type bert-japanese` | Native Japanese text only |
+
+### Model Characteristics
+
+**mDeBERTa-v3:**
+- ✅ Supports 100+ languages including Japanese
+- ✅ Good performance on romaji (romanized text)
+- ✅ No external dependencies beyond Python packages
+- ⚠️ Higher memory usage (may need smaller batch sizes)
+
+**BERT Japanese:**
+- ✅ Optimized specifically for Japanese language
+- ✅ Better tokenization for native Japanese text
+- ✅ Trained on Japanese corpus
+- ⚠️ Poor performance on romaji (romanized text)
+- ⚠️ Use only with `text_native`, not with `--use-romaji`
 
 ## Model Architecture
 
@@ -134,26 +174,27 @@ python3 inference.py --model outputs/FacebookAI_xlm_roberta_base_best_model.pt -
 ## Training Details
 
 - **Optimizer**: AdamW with learning rate 2e-5 (default)
-- **Loss**: CrossEntropyLoss with optional class weights
+- **Loss**: CrossEntropyLoss
 - **Data Split**: 80/20 train/test split with stratification
 - **Model Saving**: Automatic best model saving based on validation accuracy
 - **Progress**: Real-time progress tracking with tqdm
-- **Quick Testing**: `--quick-test` uses 50 samples, 1 epoch for rapid verification
+- **Quick Testing**: `--quick-test` uses 50 samples, 1 epoch, batch size 8 for rapid verification
 - **Flexible Sampling**: `--sample-size N` to limit training data for experimentation
+- **Gradient Accumulation**: `--gradient-accumulation-steps N` to maintain effective batch size with lower memory usage
 
 ## Output
 
 Training creates model-specific files:
 
-**For BERT model:**
-- `outputs/google_bert_bert_base_multilingual_cased_best_model.pt` - BERT model checkpoint
-- `outputs/google_bert_bert_base_multilingual_cased_results.json` - BERT training results
-- `outputs/google_bert_bert_base_multilingual_cased_config.json` - BERT training configuration
+**For mDeBERTa model:**
+- `outputs/microsoft_mdeberta_v3_base_best_model.pt` - mDeBERTa model checkpoint
+- `outputs/microsoft_mdeberta_v3_base_results.json` - mDeBERTa training results
+- `outputs/microsoft_mdeberta_v3_base_config.json` - mDeBERTa training configuration
 
-**For XLM-RoBERTa model:**
-- `outputs/FacebookAI_xlm_roberta_base_best_model.pt` - XLM-RoBERTa model checkpoint
-- `outputs/FacebookAI_xlm_roberta_base_results.json` - XLM-RoBERTa training results
-- `outputs/FacebookAI_xlm_roberta_base_config.json` - XLM-RoBERTa training configuration
+**For BERT Japanese model:**
+- `outputs/tohoku_nlp_bert_base_japanese_v3_best_model.pt` - BERT Japanese model checkpoint
+- `outputs/tohoku_nlp_bert_base_japanese_v3_results.json` - BERT Japanese training results
+- `outputs/tohoku_nlp_bert_base_japanese_v3_config.json` - BERT Japanese training configuration
 
 **For model comparison:**
 - `outputs/comparison/model_comparison.json` - Side-by-side comparison results
@@ -168,14 +209,17 @@ Model checkpoint contains:
 ## Command Line Arguments
 
 ### Training Arguments
-- `--model-type {bert,xlm-roberta}` - Choose model type (bert is default)
-- `--xlm-roberta` - Shortcut to use XLM-RoBERTa model
-- `--quick-test` - Quick verification: 50 samples, 1 epoch
+- `--model-type {mdeberta,bert-japanese}` - Choose model type (mdeberta is default)
+- `--quick-test` - Quick verification: 50 samples, 1 epoch, batch size 8
 - `--sample-size N` - Use only N training samples
-- `--use-romaji` - Use romanized text instead of native Japanese
+- `--use-romaji` - Use romanized text (recommended only with mdeberta)
 - `--epochs N` - Number of training epochs (default: 3)
 - `--batch-size N` - Batch size (default: 16)
+- `--gradient-accumulation-steps N` - Gradient accumulation steps (default: 1)
 - `--learning-rate RATE` - Learning rate (default: 2e-5)
+- `--dropout RATE` - Dropout rate (default: 0.1)
+- `--max-length N` - Maximum sequence length (default: 512)
+- `--test-size FLOAT` - Test set fraction (default: 0.2)
 - `--data-path PATH` - Path to CSV data file
 - `--output-dir DIR` - Output directory (default: outputs)
 
@@ -184,7 +228,13 @@ Model checkpoint contains:
 - `--sample-size N` - Use N training samples for each model
 - `--use-romaji` - Compare models on romanized text
 - `--epochs N` - Number of epochs for each model (default: 3)
-- `--output-dir DIR` - Directory to save comparison results
+- `--batch-size N` - Batch size (default: 16)
+- `--learning-rate RATE` - Learning rate (default: 2e-5)
+- `--dropout RATE` - Dropout rate (default: 0.1)
+- `--max-length N` - Maximum sequence length (default: 512)
+- `--test-size FLOAT` - Test set fraction (default: 0.2)
+- `--data-path PATH` - Path to CSV data file
+- `--output-dir DIR` - Directory to save comparison results (default: outputs/comparison)
 
 ### Inference Arguments
 - `--model PATH` - Path to saved model checkpoint (required)
@@ -192,11 +242,12 @@ Model checkpoint contains:
 - `--interactive` - Interactive mode for testing multiple texts
 - `--evaluate` - Evaluate model performance on test data
 - `--texts-file PATH` - File with texts to classify (one per line)
-- `--use-romaji` - Use romanized text (must match training setting)
+- `--data-path PATH` - Path to data file for evaluation (default: data/processed/paired_inspection_ai_binary.csv)
+- `--output PATH` - Output file to save results (JSON format)
 
 ## Model Comparison
 
-Compare BERT and XLM-RoBERTa performance:
+Compare mDeBERTa and BERT Japanese performance:
 
 ```bash
 # Quick comparison (recommended first)
@@ -208,7 +259,7 @@ python3 compare_models.py --epochs 5
 # Compare with specific sample size
 python3 compare_models.py --sample-size 300 --epochs 3
 
-# Compare on romanized text
+# Compare on romanized text (only mDeBERTa will perform well)
 python3 compare_models.py --use-romaji --quick-test
 ```
 
@@ -218,6 +269,8 @@ The comparison script will:
 - Highlight the best performing model
 - Save detailed results to `outputs/comparison/model_comparison.json`
 
+**Note**: When comparing with `--use-romaji`, expect mDeBERTa to significantly outperform BERT Japanese, as BERT Japanese is not designed for romanized text.
+
 ## Example Usage in Code
 
 ```python
@@ -225,35 +278,35 @@ from utils import SimpleBertClassifier, predict_text
 from transformers import AutoTokenizer
 import torch
 
-# Load BERT model
+# Load mDeBERTa model
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-bert_checkpoint = torch.load('outputs/google_bert_bert_base_multilingual_cased_best_model.pt',
-                            map_location=device, weights_only=False)
+mdeberta_checkpoint = torch.load('outputs/microsoft_mdeberta_v3_base_best_model.pt',
+                                 map_location=device, weights_only=False)
 
-bert_tokenizer = AutoTokenizer.from_pretrained(bert_checkpoint['tokenizer_name'])
-bert_model = SimpleBertClassifier(bert_checkpoint['tokenizer_name'])
-bert_model.load_state_dict(bert_checkpoint['model_state_dict'])
-bert_model.to(device)
-bert_model.eval()
+mdeberta_tokenizer = AutoTokenizer.from_pretrained(mdeberta_checkpoint['tokenizer_name'])
+mdeberta_model = SimpleBertClassifier(mdeberta_checkpoint['tokenizer_name'])
+mdeberta_model.load_state_dict(mdeberta_checkpoint['model_state_dict'])
+mdeberta_model.to(device)
+mdeberta_model.eval()
 
-# Load XLM-RoBERTa model
-xlm_checkpoint = torch.load('outputs/FacebookAI_xlm_roberta_base_best_model.pt',
-                           map_location=device, weights_only=False)
+# Load BERT Japanese model
+bert_jp_checkpoint = torch.load('outputs/tohoku_nlp_bert_base_japanese_v3_best_model.pt',
+                                map_location=device, weights_only=False)
 
-xlm_tokenizer = AutoTokenizer.from_pretrained(xlm_checkpoint['tokenizer_name'])
-xlm_model = SimpleBertClassifier(xlm_checkpoint['tokenizer_name'])
-xlm_model.load_state_dict(xlm_checkpoint['model_state_dict'])
-xlm_model.to(device)
-xlm_model.eval()
+bert_jp_tokenizer = AutoTokenizer.from_pretrained(bert_jp_checkpoint['tokenizer_name'])
+bert_jp_model = SimpleBertClassifier(bert_jp_checkpoint['tokenizer_name'])
+bert_jp_model.load_state_dict(bert_jp_checkpoint['model_state_dict'])
+bert_jp_model.to(device)
+bert_jp_model.eval()
 
-# Compare predictions
+# Compare predictions on native Japanese text
 text = "バカ野郎"
-bert_result = predict_text(bert_model, bert_tokenizer, text, device)
-xlm_result = predict_text(xlm_model, xlm_tokenizer, text, device)
+mdeberta_result = predict_text(mdeberta_model, mdeberta_tokenizer, text, device)
+bert_jp_result = predict_text(bert_jp_model, bert_jp_tokenizer, text, device)
 
 print(f"Text: {text}")
-print(f"BERT: {bert_result['prediction']} ({bert_result['confidence']:.3f})")
-print(f"XLM-RoBERTa: {xlm_result['prediction']} ({xlm_result['confidence']:.3f})")
+print(f"mDeBERTa: {mdeberta_result['prediction']} ({mdeberta_result['confidence']:.3f})")
+print(f"BERT Japanese: {bert_jp_result['prediction']} ({bert_jp_result['confidence']:.3f})")
 ```
 
 ## Data Format
@@ -275,32 +328,48 @@ The implementation expects CSV data with these columns:
 - ~10-20 samples/second on CPU
 
 ### Memory Usage
-- ~2-4GB GPU memory for batch size 16
-- ~1-2GB RAM for dataset loading
+- **mDeBERTa-v3**: ~4-8GB GPU memory for batch size 16 (higher than BERT Japanese)
+- **BERT Japanese**: ~2-4GB GPU memory for batch size 16
+- **RAM**: ~1-2GB for dataset loading
+- **Tip**: Use `--batch-size 4 --gradient-accumulation-steps 8` for 32GB GPU to maintain effective batch size of 32
 
 ### Expected Accuracy
 
-**BERT Multilingual:**
-- **Quick test**: 70-80% (limited by small data)
-- **Small dataset**: 80-85%
-- **Full dataset**: 85-90%
-
-**XLM-RoBERTa:**
-- **Quick test**: 70-85% (often slightly better than BERT)
-- **Small dataset**: 82-87%
+**mDeBERTa-v3:**
+- **Quick test**: 70-85% (limited by small data)
+- **Small dataset**: 82-88%
 - **Full dataset**: 87-92%
+- **With romaji**: Similar performance to native text
 
-**Note**: If you see 90%+ accuracy but 0% precision/recall on toxic class, your model is likely predicting only non-toxic. This is common with imbalanced small datasets. XLM-RoBERTa typically performs better on multilingual tasks.
+**BERT Japanese:**
+- **Quick test**: 70-80% (limited by small data)
+- **Small dataset**: 80-86%
+- **Full dataset**: 85-90%
+- **With romaji**: Poor performance (not recommended)
+
+**Note**: If you see 90%+ accuracy but 0% precision/recall on toxic class, your model is likely predicting only non-toxic. This is common with imbalanced small datasets. mDeBERTa typically performs better on multilingual and romanized text.
 
 ## Troubleshooting
 
+### Out of Memory Errors
+```bash
+# Reduce batch size
+python3 train.py --model-type mdeberta --batch-size 8
+
+# Use gradient accumulation (maintains effective batch size)
+python3 train.py --model-type mdeberta --batch-size 4 --gradient-accumulation-steps 8
+
+# Try with even smaller batch
+python3 train.py --model-type mdeberta --batch-size 2 --gradient-accumulation-steps 16
+```
+
 ### Model Always Predicts Non-Toxic
 ```bash
-# Use more training data with BERT
-python3 train.py --model-type bert --sample-size 200 --epochs 5
+# Use more training data with mDeBERTa
+python3 train.py --model-type mdeberta --sample-size 200 --epochs 5
 
-# Try XLM-RoBERTa (often better on imbalanced data)
-python3 train.py --model-type xlm-roberta --sample-size 200 --epochs 5
+# Try BERT Japanese (better for imbalanced native Japanese data)
+python3 train.py --model-type bert-japanese --sample-size 200 --epochs 5
 
 # Check data distribution
 python3 explore_data.py
@@ -308,14 +377,35 @@ python3 explore_data.py
 
 ### Low Accuracy on Toxic Class
 ```bash
-# Try different learning rate with BERT
-python3 train.py --model-type bert --learning-rate 1e-5 --epochs 10
+# Try different learning rate with mDeBERTa
+python3 train.py --model-type mdeberta --learning-rate 1e-5 --epochs 10
 
-# Try XLM-RoBERTa with full dataset
-python3 train.py --model-type xlm-roberta --epochs 5
+# Try BERT Japanese with full dataset
+python3 train.py --model-type bert-japanese --epochs 5
 
 # Compare both models
 python3 compare_models.py --epochs 5
+```
+
+### BERT Japanese Poor Performance
+```bash
+# Make sure NOT using romaji
+python3 train.py --model-type bert-japanese  # uses text_native by default
+
+# BERT Japanese does not work well with romaji - use mDeBERTa instead
+python3 train.py --model-type mdeberta --use-romaji
+```
+
+### Missing Dependencies
+```bash
+# For mDeBERTa
+pip install sentencepiece tiktoken protobuf
+
+# For BERT Japanese
+pip install fugashi unidic-lite
+
+# Install all
+pip install -r requirements.txt
 ```
 
 ### PyTorch Loading Errors

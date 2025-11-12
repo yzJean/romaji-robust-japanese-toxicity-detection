@@ -1,6 +1,6 @@
 """
 Transformer-based Japanese toxicity classification utilities.
-Supports BERT and XLM-RoBERTa models for quick verification of training and inference flow.
+Supports mDeBERTa-v3 and BERT Japanese models for quick verification of training and inference flow.
 """
 
 import torch
@@ -59,11 +59,11 @@ class SimpleToxicityDataset(Dataset):
 
 class SimpleBertClassifier(nn.Module):
     """Simple transformer classifier for binary toxicity detection.
-    Supports both BERT and XLM-RoBERTa models."""
+    Supports mDeBERTa-v3 and BERT Japanese models."""
 
     def __init__(
         self,
-        model_name: str = "google-bert/bert-base-multilingual-cased",
+        model_name: str = "microsoft/mdeberta-v3-base",
         dropout: float = 0.1,
     ):
         super().__init__()
@@ -76,10 +76,10 @@ class SimpleBertClassifier(nn.Module):
         )  # Binary classification
 
         # Determine model type for logging
-        if "xlm-roberta" in model_name.lower():
-            model_type = "XLM-RoBERTa"
-        elif "bert" in model_name.lower():
-            model_type = "BERT"
+        if "mdeberta" in model_name.lower():
+            model_type = "mDeBERTa-v3"
+        elif "bert-base-japanese" in model_name.lower():
+            model_type = "BERT Japanese"
         else:
             model_type = "Transformer"
 
@@ -207,7 +207,7 @@ def main():
 
     # Configuration
     DATA_PATH = "data/processed/paired_inspection_ai_binary.csv"
-    MODEL_NAME = "google-bert/bert-base-multilingual-cased"
+    MODEL_NAME = "microsoft/mdeberta-v3-base"
     USE_ROMAJI = False  # Change to True to use romanized text
     BATCH_SIZE = 16
     EPOCHS = 3

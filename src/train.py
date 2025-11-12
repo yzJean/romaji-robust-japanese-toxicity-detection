@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
-Simple training script for BERT toxicity classification.
+Simple training script for Japanese toxicity classification.
 Quick verification of model training flow.
+Supports microsoft/mdeberta-v3-base and tohoku-nlp/bert-base-japanese-v3.
 
 Usage:
-    python3 train.py --quick-test                    # Quick verification: 50 samples, 1 epoch
-    python3 train.py --xlm-roberta --quick-test      # Quick test with XLM-RoBERTa
-    python3 train.py --model-type bert               # Use BERT model
-    python3 train.py --model-type xlm-roberta        # Use XLM-RoBERTa model
-    python3 train.py --sample-size 100               # Use only 100 training samples
-    python3 train.py --sample-size 200 --epochs 2    # 200 samples, 2 epochs
-    python3 train.py --use-romaji                     # Full dataset with romaji
-    python3 train.py --epochs 5 --batch-size 32      # Full training
+    python3 train.py --quick-test                         # Quick verification: 50 samples, 1 epoch
+    python3 train.py --model-type bert-japanese --quick-test  # Quick test with BERT Japanese
+    python3 train.py --model-type mdeberta                 # Use mDeBERTa-v3 model
+    python3 train.py --model-type bert-japanese            # Use BERT Japanese model
+    python3 train.py --sample-size 100                     # Use only 100 training samples
+    python3 train.py --sample-size 200 --epochs 2          # 200 samples, 2 epochs
+    python3 train.py --use-romaji                          # Full dataset with romaji
+    python3 train.py --epochs 5 --batch-size 32            # Full training
 """
 
 import argparse
@@ -19,6 +20,7 @@ import torch
 import logging
 import numpy as np
 from utils import load_data, SimpleToxicityDataset, SimpleBertClassifier, SimpleTrainer
+import sentencepiece
 from transformers import AutoTokenizer
 from torch.utils.data import DataLoader
 from sklearn.metrics import classification_report, confusion_matrix
@@ -38,21 +40,15 @@ def parse_args():
     parser.add_argument(
         "--data-path",
         type=str,
-        default="data/processed/paired_inspection_ai_binary.csv",
+        default="data/processed/paired_native_romaji_inspection_ai_binary.csv",
         help="Path to the paired CSV data file",
     )
 
     parser.add_argument(
         "--model-type",
         type=str,
-        choices=["bert", "xlm-roberta"],
-        help="Quick model selection: bert or xlm-roberta",
-    )
-
-    parser.add_argument(
-        "--xlm-roberta",
-        action="store_true",
-        help="Use XLM-RoBERTa model (shortcut for FacebookAI/xlm-roberta-base)",
+        choices=["mdeberta", "bert-japanese"],
+        help="Quick model selection: mdeberta or bert-japanese. mdeberta is shortcut for microsoft/mdeberta-v3-base. bert-japanese is shortcut for tohoku-nlp/bert-base-japanese-v3.",
     )
 
     parser.add_argument(
@@ -119,16 +115,16 @@ def main():
     logger.info(f"Using device: {device}")
 
     # Model selection logic
-    if args.xlm_roberta or args.model_type == "xlm-roberta":
-        args.model_name = "FacebookAI/xlm-roberta-base"
-        logger.info("Selected XLM-RoBERTa model")
-    elif args.model_type == "bert":
-        args.model_name = "google-bert/bert-base-multilingual-cased"
-        logger.info("Selected BERT model")
+    if args.model_type == "mdeberta":
+        args.model_name = "microsoft/mdeberta-v3-base"
+        logger.info("Selected mDeBERTa-v3 model")
+    elif args.model_type == "bert-japanese":
+        args.model_name = "tohoku-nlp/bert-base-japanese-v3"
+        logger.info("Selected BERT Japanese model")
     else:
-        # Default to BERT if no model specified
-        args.model_name = "google-bert/bert-base-multilingual-cased"
-        logger.info("Selected BERT model (default)")
+        # Default to mDeBERTa if no model specified
+        args.model_name = "microsoft/mdeberta-v3-base"
+        logger.info("Selected mDeBERTa-v3 model (default)")
 
     logger.info(f"Using model: {args.model_name}")
 
