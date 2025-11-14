@@ -5,7 +5,7 @@ Supports mDeBERTa-v3 and BERT Japanese models for quick verification of training
 
 import torch
 import torch.nn as nn
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModel, AutoModelForSequenceClassification
 import pandas as pd
 import numpy as np
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
@@ -59,7 +59,7 @@ class SimpleToxicityDataset(Dataset):
 
 class SimpleBertClassifier(nn.Module):
     """Simple transformer classifier for binary toxicity detection.
-    Supports mDeBERTa-v3 and BERT Japanese models."""
+    Supports encoder-only models (mDeBERTa-v3, BERT Japanese) and encoder-decoder models (ByT5)."""
 
     def __init__(
         self,
@@ -69,32 +69,84 @@ class SimpleBertClassifier(nn.Module):
         super().__init__()
 
         self.model_name = model_name
-        self.transformer = AutoModel.from_pretrained(model_name)
-        self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(
-            self.transformer.config.hidden_size, 2
-        )  # Binary classification
+        self.is_t5 = "t5" in model_name.lower()
+
+        # Loading large transformer weights can momentarily spike CPU memory usage.
+        # low_cpu_mem_usage streams the weights in and keeps peak memory low. We
+        # fall back gracefully if this transformers version does not support it.
+        load_kwargs = {
+            "torch_dtype": torch.float16 if torch.cuda.is_available() else torch.float32,
+            "low_cpu_mem_usage": True,
+        }
+
+        # T5 models need special handling - use AutoModelForSequenceClassification
+        if self.is_t5:
+            load_kwargs["num_labels"] = 2
+            try:
+                self.transformer = AutoModelForSequenceClassification.from_pretrained(
+                    model_name, **load_kwargs
+                )
+            except TypeError:
+                load_kwargs.pop("low_cpu_mem_usage", None)
+                self.transformer = AutoModelForSequenceClassification.from_pretrained(
+                    model_name, **load_kwargs
+                )
+            except RuntimeError:
+                load_kwargs["torch_dtype"] = torch.float32
+                self.transformer = AutoModelForSequenceClassification.from_pretrained(
+                    model_name, **load_kwargs
+                )
+            self.dropout = None
+            self.classifier = None
+        else:
+            # Encoder-only models (BERT, DeBERTa, etc.)
+            try:
+                self.transformer = AutoModel.from_pretrained(model_name, **load_kwargs)
+            except TypeError:
+                # Older transformers releases do not accept low_cpu_mem_usage.
+                load_kwargs.pop("low_cpu_mem_usage", None)
+                self.transformer = AutoModel.from_pretrained(model_name, **load_kwargs)
+            except RuntimeError:
+                # Some CPU builds cannot handle float16 weights; retry with float32.
+                load_kwargs["torch_dtype"] = torch.float32
+                self.transformer = AutoModel.from_pretrained(model_name, **load_kwargs)
+            self.dropout = nn.Dropout(dropout)
+            self.classifier = nn.Linear(
+                self.transformer.config.hidden_size, 2
+            )  # Binary classification
 
         # Determine model type for logging
         if "mdeberta" in model_name.lower():
             model_type = "mDeBERTa-v3"
         elif "bert-base-japanese" in model_name.lower():
             model_type = "BERT Japanese"
+        elif self.is_t5:
+            model_type = "T5/ByT5"
         else:
             model_type = "Transformer"
 
         logger.info(f"{model_type} model initialized with {model_name}")
-        logger.info(f"Hidden size: {self.transformer.config.hidden_size}")
+        if not self.is_t5:
+            logger.info(f"Hidden size: {self.transformer.config.hidden_size}")
 
     def forward(self, input_ids, attention_mask):
-        outputs = self.transformer(input_ids=input_ids, attention_mask=attention_mask)
+        if self.is_t5:
+            # T5 models handle classification internally
+            outputs = self.transformer(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+            )
+            return outputs.logits
+        else:
+            # Encoder-only models
+            outputs = self.transformer(input_ids=input_ids, attention_mask=attention_mask)
 
-        # Use [CLS] token representation
-        pooled_output = outputs.last_hidden_state[:, 0, :]
-        pooled_output = self.dropout(pooled_output)
+            # Use [CLS] token representation
+            pooled_output = outputs.last_hidden_state[:, 0, :]
+            pooled_output = self.dropout(pooled_output)
 
-        logits = self.classifier(pooled_output)
-        return logits
+            logits = self.classifier(pooled_output)
+            return logits
 
 
 class SimpleTrainer:
