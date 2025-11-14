@@ -42,5 +42,7 @@ We hand off Binary Strict: drop rows where `label_int_coarse` is missing (Ambigu
 ## Reproduction (commands, currently only tested on Inspection AI)
 ```bash
 # Generate paired binary file
-python scripts/pair_native_romaji.py   --infile  data/standardized/inspection_ai.csv   --outfile data/processed/paired_inspection_ai_binary.csv
+python scripts/pair_native_romaji.py   --infile  data/standardized/inspection_ai.csv   --outfile data/processed/paired_native_romaji_inspection_ai_binary.csv
+
+python scripts/pair_native_romaji.py   --infile  data/standardized/llmjp.csv   --outfile data/processed/paired_native_romaji_llmjp_binary.csv
 ```
