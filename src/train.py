@@ -216,8 +216,10 @@ def main():
             best_val_acc = val_acc
             # Create safe filename from model name
             safe_model_name = args.model_name.replace("/", "_").replace("-", "_")
+            # Add romaji tag if using romanized text
+            romaji_tag = "_romaji" if args.use_romaji else ""
             model_path = os.path.join(
-                args.output_dir, f"{safe_model_name}_best_model.pt"
+                args.output_dir, f"{safe_model_name}{romaji_tag}_best_model.pt"
             )
             torch.save(
                 {
@@ -265,7 +267,11 @@ def main():
 
     # Create safe filename from model name
     safe_model_name = args.model_name.replace("/", "_").replace("-", "_")
-    results_path = os.path.join(args.output_dir, f"{safe_model_name}_results.json")
+    # Add romaji tag if using romanized text
+    romaji_tag = "_romaji" if args.use_romaji else ""
+    results_path = os.path.join(
+        args.output_dir, f"{safe_model_name}{romaji_tag}_results.json"
+    )
     with open(results_path, "w") as f:
         # Convert numpy arrays to lists for JSON serialization
         json_results = {
@@ -276,7 +282,9 @@ def main():
     logger.info(f"Results saved to {results_path}")
 
     # Save configuration
-    config_path = os.path.join(args.output_dir, f"{safe_model_name}_config.json")
+    config_path = os.path.join(
+        args.output_dir, f"{safe_model_name}{romaji_tag}_config.json"
+    )
     with open(config_path, "w") as f:
         json.dump(vars(args), f, indent=2)
 
