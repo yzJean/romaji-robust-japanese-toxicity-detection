@@ -32,7 +32,7 @@ pip install fugashi unidic-lite
 
 Or install all requirements:
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txtpip install -r requirements.txt
 ```
 
 ### 2. Prepare Data
@@ -109,6 +109,11 @@ Compare both models:
 ```bash
 python3 compare_models.py --quick-test
 python3 compare_models.py --epochs 5 --sample-size 500
+```
+
+Tokenizer vs byte-level comparison (mDeBERTa vs ByT5):
+```bash
+python3 tokenizer_vs_byt5.py --epochs 3
 ```
 
 ### 5. Run Inference
@@ -252,6 +257,7 @@ Compare mDeBERTa and BERT Japanese performance:
 ```bash
 # Quick comparison (recommended first)
 python3 compare_models.py --quick-test
+python3 compare_models.py --quick-test --data-path ../data/processed/paired_inspection_ai_binary.csv
 
 # Full comparison
 python3 compare_models.py --epochs 5
