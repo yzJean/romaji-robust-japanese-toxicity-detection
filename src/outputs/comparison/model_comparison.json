@@ -1,0 +1,32 @@
+{
+  "comparison_date": "2025-11-13 21:18:08",
+  "config": {
+    "data_path": "../data/processed/paired_inspection_ai_binary.csv",
+    "use_romaji": false,
+    "sample_size": null,
+    "quick_test": false,
+    "epochs": 5,
+    "batch_size": 16,
+    "learning_rate": 2e-05,
+    "dropout": 0.1,
+    "max_length": 512,
+    "test_size": 0.2,
+    "output_dir": "outputs/comparison"
+  },
+  "results": [
+    {
+      "model_name": "mDeBERTa-v3",
+      "model_path": "microsoft/mdeberta-v3-base",
+      "training_time": 1377.4646971225739,
+      "best_val_accuracy": 0.9193548387096774,
+      "final_accuracy": 0.9193548387096774
+    },
+    {
+      "model_name": "BERT-Japanese",
+      "model_path": "tohoku-nlp/bert-base-japanese-v3",
+      "training_time": 687.0986597537994,
+      "best_val_accuracy": 0.9032258064516129,
+      "final_accuracy": 0.9032258064516129
+    }
+  ]
+}
