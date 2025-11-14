@@ -247,7 +247,7 @@ Model checkpoint contains:
 - `--interactive` - Interactive mode for testing multiple texts
 - `--evaluate` - Evaluate model performance on test data
 - `--texts-file PATH` - File with texts to classify (one per line)
-- `--data-path PATH` - Path to data file for evaluation (default: data/processed/paired_inspection_ai_binary.csv)
+- `--data-path PATH` - Path to data file for evaluation (default: data/processed/paired_native_romaji_inspection_ai_binary.csv)
 - `--output PATH` - Output file to save results (JSON format)
 
 ## Model Comparison
@@ -257,7 +257,7 @@ Compare mDeBERTa and BERT Japanese performance:
 ```bash
 # Quick comparison (recommended first)
 python3 compare_models.py --quick-test
-python3 compare_models.py --quick-test --data-path ../data/processed/paired_inspection_ai_binary.csv
+python3 compare_models.py --quick-test --data-path ../data/processed/paired_native_romaji_inspection_ai_binary.csv
 
 # Full comparison
 python3 compare_models.py --epochs 5

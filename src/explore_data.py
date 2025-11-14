@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 
 
-def explore_data(csv_path="data/processed/paired_inspection_ai_binary.csv"):
+def explore_data(csv_path="data/processed/paired_native_romaji_inspection_ai_binary.csv"):
     """Explore the dataset to understand size and distribution."""
 
     print("=" * 60)
@@ -69,6 +69,6 @@ if __name__ == "__main__":
     csv_path = (
         sys.argv[1]
         if len(sys.argv) > 1
-        else "data/processed/paired_inspection_ai_binary.csv"
+        else "data/processed/paired_native_romaji_inspection_ai_binary.csv"
     )
     explore_data(csv_path)

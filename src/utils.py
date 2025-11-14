@@ -166,7 +166,7 @@ def load_data(
     Load and split the paired CSV data.
 
     Args:
-        csv_path: Path to the paired CSV file (e.g., paired_inspection_ai_binary.csv)
+        csv_path: Path to the paired CSV file (e.g., paired_native_romaji_inspection_ai_binary.csv)
         use_romaji: Whether to use romanized text instead of native Japanese
         test_size: Fraction of data to use for testing
 
@@ -206,7 +206,7 @@ def main():
     """Main training and evaluation function."""
 
     # Configuration
-    DATA_PATH = "data/processed/paired_inspection_ai_binary.csv"
+    DATA_PATH = "data/processed/paired_native_romaji_inspection_ai_binary.csv"
     MODEL_NAME = "microsoft/mdeberta-v3-base"
     USE_ROMAJI = False  # Change to True to use romanized text
     BATCH_SIZE = 16
@@ -334,7 +334,7 @@ def predict_text(model, tokenizer, text: str, device, max_length: int = 512):
 
 if __name__ == "__main__":
     # Check if data exists
-    data_path = "data/processed/paired_inspection_ai_binary.csv"
+    data_path = "data/processed/paired_native_romaji_inspection_ai_binary.csv"
     if not os.path.exists(data_path):
         logger.error(f"Data file not found: {data_path}")
         logger.error("Please ensure you have run the data processing pipeline first.")

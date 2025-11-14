@@ -198,7 +198,7 @@ def parse_args():
     parser.add_argument(
         "--data-path",
         type=str,
-        default="data/processed/paired_inspection_ai_binary.csv",
+        default="data/processed/paired_native_romaji_inspection_ai_binary.csv",
         help="Path to data file for evaluation",
     )
 

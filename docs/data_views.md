@@ -33,7 +33,7 @@ For analysis, you can treat the fine labels as an **ordinal** 0–3 scale. This 
 We hand off Binary Strict: drop rows where `label_int_coarse` is missing (Ambiguous). We still keep the standardized files so tri‑state and ordinal ablations are trivial later.
 
 ## Week‑1 Deliverable
-`data/processed/paired_inspection_ai_binary.csv` with columns:  
+`data/processed/paired_native_romaji_inspection_ai_binary.csv` with columns:  
 `id, text_native, text_romaji, label_int_coarse, label_text_fine, source`
 
 - Input: the standardized Inspection‑AI CSV.  

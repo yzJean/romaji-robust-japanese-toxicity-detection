@@ -1,7 +1,7 @@
 {
   "comparison_date": "2025-11-13 21:18:08",
   "config": {
-    "data_path": "../data/processed/paired_inspection_ai_binary.csv",
+    "data_path": "../data/processed/paired_native_romaji_inspection_ai_binary.csv",
     "use_romaji": false,
     "sample_size": null,
     "quick_test": false,
