@@ -2,17 +2,18 @@
 """
 Simple training script for Japanese toxicity classification.
 Quick verification of model training flow.
-Supports microsoft/mdeberta-v3-base and tohoku-nlp/bert-base-japanese-v3.
+Supports microsoft/mdeberta-v3-base, tohoku-nlp/bert-base-japanese-v3, and google/byt5-small.
 
 Usage:
-    python3 train.py --quick-test                         # Quick verification: 50 samples, 1 epoch
-    python3 train.py --model-type bert-japanese --quick-test  # Quick test with BERT Japanese
-    python3 train.py --model-type mdeberta                 # Use mDeBERTa-v3 model
-    python3 train.py --model-type bert-japanese            # Use BERT Japanese model
-    python3 train.py --sample-size 100                     # Use only 100 training samples
-    python3 train.py --sample-size 200 --epochs 2          # 200 samples, 2 epochs
-    python3 train.py --use-romaji                          # Full dataset with romaji
-    python3 train.py --epochs 5 --batch-size 32            # Full training
+    python3 src/train.py --quick-test                         # Quick verification: 50 samples, 1 epoch
+    python3 src/train.py --model-type bert-japanese --quick-test  # Quick test with BERT Japanese
+    python3 src/train.py --model-type mdeberta                 # Use mDeBERTa-v3 model
+    python3 src/train.py --model-type bert-japanese            # Use BERT Japanese model
+    python3 src/train.py --model-type byt5                     # Use ByT5-small byte-level model
+    python3 src/train.py --sample-size 100                     # Use only 100 training samples
+    python3 src/train.py --sample-size 200 --epochs 2          # 200 samples, 2 epochs
+    python3 src/train.py --use-romaji                          # Full dataset with romaji
+    python3 src/train.py --epochs 5 --batch-size 32            # Full training
 """
 
 import argparse
@@ -47,8 +48,8 @@ def parse_args():
     parser.add_argument(
         "--model-type",
         type=str,
-        choices=["mdeberta", "bert-japanese"],
-        help="Quick model selection: mdeberta or bert-japanese. mdeberta is shortcut for microsoft/mdeberta-v3-base. bert-japanese is shortcut for tohoku-nlp/bert-base-japanese-v3.",
+        choices=["mdeberta", "bert-japanese", "byt5"],
+        help="Quick model selection: mdeberta, bert-japanese, or byt5. mdeberta is shortcut for microsoft/mdeberta-v3-base. bert-japanese is shortcut for tohoku-nlp/bert-base-japanese-v3. byt5 is shortcut for google/byt5-small (byte-level, tokenizer-free).",
     )
 
     parser.add_argument(
@@ -121,6 +122,9 @@ def main():
     elif args.model_type == "bert-japanese":
         args.model_name = "tohoku-nlp/bert-base-japanese-v3"
         logger.info("Selected BERT Japanese model")
+    elif args.model_type == "byt5":
+        args.model_name = "google/byt5-small"
+        logger.info("Selected ByT5-small byte-level model")
     else:
         # Default to mDeBERTa if no model specified
         args.model_name = "microsoft/mdeberta-v3-base"
