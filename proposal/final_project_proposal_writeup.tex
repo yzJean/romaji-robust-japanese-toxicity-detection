@@ -100,10 +100,16 @@ pykakasi (v2.2+) \cite{pykakasi2024} for reliable Japanese-to-romaji conversion 
 
 \subsection{Model Fine-tuning}
 \begin{itemize}
-\item Fine-tune BERT-base-multilingual and XLM-RoBERTa-base on romanized Japanese toxicity data 
-\item Implement stratified sampling on Romanized Japanese to address potential class imbalance 
-\item Use standard hyperparameters: learning rate (e.g. 2e-5), batch size (e.g. 16), (e.g. 3-5) epochs with early stopping 
-\item Apply cross-validation to ensure robust performance estimates
+\item Fine-tune three model architectures on binary toxicity classification:
+  \begin{itemize}
+  \item \textbf{BERT base Japanese} (tohoku-nlp/bert-base-japanese-v3): Language-specific subword model with MeCab tokenizer
+  \item \textbf{mDeBERTa-v3 base} (microsoft/mdeberta-v3-base): Multilingual subword model pre-trained on 100+ languages
+  \item \textbf{ByT5-small} (google/byt5-small): Tokenization-free byte-level encoder-decoder model
+  \end{itemize}
+\item Train each model on both native Japanese and romanized (rōmaji) text independently to measure script-invariance
+\item Implement stratified train/test split (80/20) to maintain toxicity class distribution and ensure reproducibility via fixed random seed
+\item Use standard hyperparameters: learning rate 2e-5, batch size 16, 3 epochs, AdamW optimizer, dropout 0.1
+\item Save best model checkpoint based on validation accuracy for each configuration (model × script type)
 \end{itemize} 
 
 \section{Evaluation}
