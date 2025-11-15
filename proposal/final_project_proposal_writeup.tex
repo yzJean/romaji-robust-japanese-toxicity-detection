@@ -154,111 +154,78 @@ Some light sanity checks (spot-checking rows to make sure the rōmaji looks reas
 \end{itemize} 
 
 \section{Evaluation}
-\subsection{Robust Script Invarience}
-This section systematically evaluates toxicity classifiers for their ability to maintain high performance and consistent predictions across native-script and romanized (romaji) Japanese text. We use the following analytic procedure:
 
-\subsubsection{Classification Performance}
+Our evaluation strategy has two complementary goals: (1) measure script-invariance robustness across all three models, and (2) diagnose whether tokenization is the root cause of romaji performance degradation by comparing tokenized vs tokenization-free architectures.
+
+\subsection{Script-Invariance Evaluation Framework}
+\label{subsec:script-invariance}
+
+We evaluate all three models (mDeBERTa-v3, BERT Japanese, ByT5) using a unified set of metrics that quantify how well they maintain toxicity detection performance when switching from native Japanese to romaji:
+
 \begin{itemize}
-\item \textbf{F1\_native:} Precision, Recall, and F1-score on the held-out native-script test set (per level and macro-averaged)
-\item \textbf{F1\_romaji:} Precision, Recall, and F1-score on the held-out romaji test set (per level and macro-averaged)
+\item \textbf{Per-Script Performance:} Standard classification metrics (Precision, Recall, F1-score per-class and macro-averaged) computed separately for native and romaji test sets
+\item \textbf{Script-Invariance Gap:} $\Delta F_1 = F_{1,\text{native}} - F_{1,\text{romaji}}$ with 95\% confidence intervals. Smaller $|\Delta F_1|$ indicates better script robustness.
+\item \textbf{Label Consistency Rate:} Percentage of test instances with identical predictions across native and romaji versions (Flip rate = 1 - Consistency)
+\item \textbf{Statistical Significance:} McNemar's test on paired native vs romaji predictions to assess whether error rate differences are statistically significant
+\item \textbf{Error Pattern Analysis:} Manual review of top 50 high-$\Delta F_1$ cases to identify systematic failure modes
+\item \textbf{Efficiency Metrics (Optional):} Inference latency (ms/sample), throughput (samples/s), peak GPU memory
 \end{itemize}
 
-\subsubsection{Script-Invariance Gap}
-\begin{itemize}
-    \item For each toxicity level:
-    \[
-        \Delta F_1 = F_{1,\text{native}} - F_{1,\text{r\={o}maji}}
-    \]
-    Report mean $\Delta$F1 and 95\% confidence interval.
-    \item \textbf{Label Consistency Rate:} Percentage of test instances whose predicted label is identical between native and romaji forms (Flip rate $=$ 1 $-$ Consistency).
-\end{itemize}
-
-\subsubsection{Statistical Significance}
-\begin{itemize}
-    \item \textbf{McNemar's Test:} Paired McNemar's test between native and romaji predictions to determine whether the error rate difference is statistically significant.
-\end{itemize}
-
-\subsubsection{Robustness to Romanization Variants}
-\begin{itemize}
-    \item For each common perturbation (long-vowel representation, gemination, numeric leet), calculate:
-    \[
-        \Delta F_{1,\text{variant}} = F_{1,\text{r\={o}maji}} - F_{1,\text{variant}}
-    \]
-
-\end{itemize}
-
-\subsubsection{Error Analysis on Romanized Inputs}
-\begin{itemize}
-    \item \textbf{High-$\Delta$F1 Case Review:} Manually review the top 50 samples with the largest native–romaji F1 discrepancy to identify common romanization-related prediction failures.
-\end{itemize}
-
-\subsubsection{Efficiency Metrics for Deployment (Optional)}
-\begin{itemize}
-    \item Inference latency (ms/sample) and throughput (samples/s) on GPU/CPU
-    \item Peak GPU memory usage during batch inference
-\end{itemize}
+These metrics establish a baseline understanding of script-invariance performance for each model, which we then use in the comparative analysis below.
 
 \subsection{Tokenization vs Tokenization-free Model Comparison}
 \label{subsec:tokenization-comparison}
 
-This section addresses our second main research goal: evaluating whether tokenization-free models like ByT5 maintain better toxicity detection performance across scripts compared to tokenized models (BERT Japanese, mDeBERTa). If tokenization is causing the performance drops we observed on romaji, then byte-level models that process raw text without tokenization might be the solution.
+Using the metrics from Section~\ref{subsec:script-invariance}, we perform targeted comparative analysis to answer our second research question: does tokenization cause romaji performance degradation, and do byte-level models solve this problem?
 
-\subsubsection{Comparative Performance Metrics}
-
-First, we need to establish whether there's actually a performance difference between tokenized and tokenization-free models on romaji. These metrics directly measure which model type maintains better performance when switching from native Japanese to romaji.
-
+\subsubsection{Hypothesis Testing}
 \begin{itemize}
-\item \textbf{Script-Invariance Gap:} For each model, compute $\Delta F_1 = F_{1,\text{native}} - F_{1,\text{romaji}}$. Compare:
-  \begin{itemize}
-  \item Tokenized models (BERT Japanese, mDeBERTa): Expected larger $|\Delta F_1|$ due to tokenization mismatch on romaji
-  \item Tokenization-free (ByT5): Expected smaller $|\Delta F_1|$ due to byte-level robustness
-  \end{itemize}
-\item \textbf{Toxic Recall Degradation:} Measure $\Delta \text{Recall}_{\text{toxic}} = \text{Recall}_{\text{native}} - \text{Recall}_{\text{romaji}}$ to assess which architecture better preserves toxic detection capability across scripts
-\item \textbf{Macro-averaged F1 Comparison:} Report macro F1 on romaji test set for all three models to directly compare overall performance on romanized text
+\item \textbf{H1 - Performance Gap:} Tokenized models (BERT Japanese, mDeBERTa) will show larger $|\Delta F_1|$ than ByT5 due to tokenization mismatch on romaji
+\item \textbf{H2 - Toxic Recall Preservation:} ByT5 will maintain higher toxic recall when switching to romaji compared to tokenized models
+\item \textbf{H3 - Perturbation Resilience:} ByT5 will show smaller F1 degradation under romanization variants than tokenized models
 \end{itemize}
 
-\subsubsection{Tokenized Model Diagnostic Metrics}
+\subsubsection{Tokenization Failure Diagnostics}
 
-If tokenized models perform poorly on romaji, we need to understand why. This subsection focuses on measuring specific tokenization problems that affect BERT Japanese and mDeBERTa when they process romanized text.
+For tokenized models only (BERT Japanese, mDeBERTa), we measure tokenization-specific artifacts on romaji text:
 
 \begin{itemize}
-\item \textbf{Out-of-Vocabulary (OOV) Rate:} Percentage of romaji tokens not in the model's vocabulary
-\item \textbf{Unknown Token Frequency:} Count of [UNK] tokens per sentence when processing romaji text
-\item \textbf{Tokenization Granularity:} Average tokens per sentence (native vs romaji) to quantify fragmentation
-\item \textbf{MeCab Fragmentation Examples:} For BERT Japanese, identify cases where MeCab incorrectly segments romaji
+\item \textbf{Out-of-Vocabulary (OOV) Rate:} Percentage of romaji tokens absent from model vocabulary
+\item \textbf{Unknown Token Frequency:} Count of [UNK] tokens per sentence on romaji vs native
+\item \textbf{Tokenization Granularity:} Mean tokens/sentence ratio: $\frac{\text{tokens}_{\text{romaji}}}{\text{tokens}_{\text{native}}}$. Values $>1$ indicate fragmentation.
+\item \textbf{Segmentation Errors:} For BERT Japanese, qualitative analysis of MeCab failures on romaji (e.g., incorrect morpheme boundaries)
 \end{itemize}
 
-\subsubsection{Tokenization-free Model Advantage Metrics}
+\subsubsection{Byte-Level Advantage Analysis}
 
-ByT5 should theoretically handle romaji variations better because it processes text at the byte level instead of breaking it into tokens. These metrics test whether ByT5 actually shows this advantage when dealing with spelling variations and noise in romaji.
+To verify whether ByT5's byte-level processing provides practical advantages:
 
 \begin{itemize}
-\item \textbf{Perturbation Resilience:} Introduce controlled noise (typos, spacing variations, vowel length ambiguity) to romaji. Measure F1 degradation: $\Delta F_{1,\text{perturbed}} = F_{1,\text{clean}} - F_{1,\text{noisy}}$. Hypothesis: ByT5 shows minimal degradation
-\item \textbf{Character-level Robustness:} Test on romanization variants (e.g., "ou" vs "ō", "kka" vs "kka"). Compare error rates across model types
+\item \textbf{Perturbation Resilience:} Measure $\Delta F_{1,\text{perturbed}} = F_{1,\text{clean}} - F_{1,\text{noisy}}$ on romaji with controlled noise (typos, spacing variations, vowel length ambiguity). Hypothesis: ByT5 shows minimal degradation.
+\item \textbf{Romanization Variant Robustness:} Compare error rates across romanization styles (Hepburn vs Kunrei-shiki approximations)
 \end{itemize}
 
 \subsubsection{Cross-Architecture Analysis}
 
-Finally, we need to understand where the models agree and disagree, and whether the computational cost of ByT5 is justified by its performance gains. This subsection analyzes prediction patterns and cost-benefit trade-offs.
-
 \begin{itemize}
-\item \textbf{Prediction Agreement:} Calculate Cohen's Kappa between each tokenized model and ByT5 on romaji predictions. Kappa values: $\kappa < 0.6$ indicates moderate or lower agreement, suggesting tokenization-induced prediction differences; $\kappa > 0.8$ indicates substantial agreement, suggesting tokenization is not the primary factor affecting predictions
-\item \textbf{Error Type Distribution and Pattern Analysis:} For romaji test set, categorize errors into four types:
+\item \textbf{Prediction Agreement:} Cohen's Kappa between tokenized models and ByT5 on romaji. $\kappa < 0.6$ suggests tokenization-induced disagreement; $\kappa > 0.8$ indicates agreement despite different architectures.
+\item \textbf{Error Taxonomy:} Categorize romaji test set predictions into four types:
   \begin{itemize}
-  \item Type A: Both tokenized and tokenization-free models correct
-  \item Type B: Tokenized models fail, ByT5 succeeds (tokenization failure)
-  \item Type C: ByT5 fails, tokenized models succeed (byte-level limitation)
-  \item Type D: Both fail (inherently difficult samples)
+  \item Type A: All models correct (baseline difficulty)
+  \item Type B: Tokenized fail, ByT5 succeeds (tokenization failure evidence)
+  \item Type C: ByT5 fails, tokenized succeed (byte-level limitation)
+  \item Type D: All fail (inherently difficult)
   \end{itemize}
-  Report percentage distribution and analyze Type B vs Type C ratio. For Type B and Type C cases, conduct qualitative analysis to identify systematic patterns (e.g., linguistic features, token characteristics, sequence length) that distinguish when tokenization vs byte-level processing fails
-\item \textbf{Computational Cost-Benefit Analysis:}
+  High Type B / Type C ratio supports tokenization as primary failure cause.
+\item \textbf{Computational Cost-Benefit:} 
   \begin{itemize}
-  \item Inference latency (ms): median and 95th percentile across 1000 samples
-  \item GPU memory usage (MB): peak allocation during batch inference (batch size = 16)
-  \item Throughput (samples/second): processing speed on full test set
-  \item Robustness gain per computational unit: $\frac{\Delta F_1 \text{ improvement}}{\text{inference time ratio}}$ comparing ByT5 to fastest tokenized model. Higher value indicates better efficiency trade-off (more robustness improvement per unit of computational cost); lower value indicates worse trade-off (expensive computational cost for small gains)
+  \item Measure inference latency (median, 95th percentile), GPU memory, throughput for all models
+  \item Calculate robustness gain per computational unit: $\frac{|\Delta F_1_{\text{ByT5}}| - |\Delta F_1_{\text{best-tokenized}}|}{\text{latency}_{\text{ByT5}} / \text{latency}_{\text{best-tokenized}}}$
+  \item Positive values indicate ByT5's robustness improvement justifies computational overhead
   \end{itemize}
 \end{itemize}
+
+This two-stage evaluation design allows us to first establish individual model robustness, then systematically diagnose whether tokenization is the primary factor limiting romaji performance.
 
 \section{Actual Outcomes}
 
@@ -295,17 +262,19 @@ ByT5-small & Native & 0.83* & - & - & \multirow{2}{*}{TBD} \\
 
 \subsubsection{Key Findings}
 \begin{itemize}
-\item \textbf{Tokenized Models Show Script Degradation:} Both mDeBERTa and BERT Japanese experience 12-13 point drops in macro F1 when switching from native to romaji ($\Delta F_1 \approx -0.12$), confirming our hypothesis about tokenization-induced brittleness
+\item \textbf{Tokenized Models Show Script Degradation:} Both mDeBERTa and BERT Japanese experience 12-13 point drops in macro F1 when switching from native to romaji ($\Delta F_1 \approx -0.12$), providing preliminary evidence for H1 (tokenized models show larger performance gaps)
 \item \textbf{Different Failure Modes:}
   \begin{itemize}
   \item \textit{mDeBERTa on romaji}: Low non-toxic recall (0.69) but high toxic recall (0.90) - tends to over-predict toxicity
   \item \textit{BERT Japanese on romaji}: High non-toxic recall (0.89) but low toxic recall (0.61) - misses 39\% of toxic content, likely due to MeCab tokenizer failures on romanized text
   \end{itemize}
-\item \textbf{ByT5 Requires Further Investigation:} Preliminary results show poor performance on romaji (0.17 accuracy), suggesting training instability or implementation issues that need debugging
+\item \textbf{ByT5 Requires Further Investigation:} Preliminary results show poor performance on romaji (0.17 accuracy), suggesting training instability or implementation issues that need debugging before we can test H1-H3
 \item \textbf{Paired Datasets Established:} Successfully created paired native/romaji datasets from both inspection-ai (310 samples, for quick prototyping) and llmjp (3847 samples, used for reported results)
 \end{itemize}
 
-\subsection{Deliverables Completed}
+\subsection{Implementation and Evaluation Progress}
+
+\textbf{Completed Deliverables:}
 \begin{itemize}
 \item Paired native-romaji Japanese toxicity benchmarks:
   \begin{itemize}
@@ -314,42 +283,70 @@ ByT5-small & Native & 0.83* & - & - & \multirow{2}{*}{TBD} \\
   \end{itemize}
 \item Training pipeline supporting three model architectures with script selection (--use-romaji flag)
 \item Reproducible training scripts with fixed random seeds and stratified splits
-\item Comprehensive evaluation metrics: accuracy, precision, recall, F1 (per-class and macro-averaged), confusion matrices
 \item Model checkpoints and result files for mDeBERTa and BERT Japanese on both scripts
+\end{itemize}
+
+\textbf{Evaluation Metrics Completed} (from Section~\ref{subsec:script-invariance}):
+\begin{itemize}
+\item Per-Script Performance: Accuracy, precision, recall, F1 (per-class and macro-averaged) for mDeBERTa and BERT Japanese
+\item Script-Invariance Gap: $\Delta F_1$ = -0.12 to -0.13 for tokenized models
+\item Error Pattern Analysis: Qualitative analysis of distinct failure modes (over-prediction vs toxic recall degradation)
+\end{itemize}
+
+\textbf{Pending Evaluation} (from Section~\ref{subsec:script-invariance} and Section~\ref{subsec:tokenization-comparison}):
+\begin{itemize}
+\item Label Consistency Rate, statistical significance tests (McNemar's), perturbation robustness
+\item Tokenization diagnostics: OOV rates, [UNK] frequency, granularity ratios, MeCab segmentation analysis
+\item ByT5 training and all hypothesis testing (H1-H3)
+\item Cross-architecture analysis: Cohen's Kappa, error taxonomy (Type A/B/C/D), cost-benefit metrics
+\item Efficiency metrics (optional): Inference latency, GPU memory, throughput
 \end{itemize}
 
 \section{Future Work}
 
-We still have several important tasks to finish before we can fully answer our research questions. This section outlines what we need to do next, organized by priority. The main challenge is getting ByT5 to work properly so we can compare it fairly with the other models.
+We still have several important tasks to finish before we can fully answer our research questions. This section outlines what we need to do next, organized by the evaluation framework defined in Section~\ref{subsec:script-invariance} and Section~\ref{subsec:tokenization-comparison}.
 
-\subsection{Immediate Priorities}
+\subsection{Complete Script-Invariance Evaluation}
 \begin{itemize}
-\item \textbf{Debug ByT5 Training:} Investigate the poor romaji performance (0.17 accuracy). Potential issues include:
+\item \textbf{Statistical Significance Testing:} Apply McNemar's test to determine if native vs romaji error rate differences are statistically significant for mDeBERTa and BERT Japanese
+\item \textbf{Label Consistency Analysis:} Calculate flip rates and consistency percentages across script changes
+\item \textbf{Perturbation Robustness:} Test all models on romanization variants (long-vowel representations, gemination styles, numeric leet)
+\item \textbf{Systematic Error Analysis:} Manual review of top 50 high-$\Delta F_1$ cases to identify failure patterns
+\end{itemize}
+
+\subsection{Complete Tokenization vs Tokenization-free Comparison}
+
+\subsubsection{Immediate Priority: Fix ByT5 Training}
+\begin{itemize}
+\item \textbf{Debug ByT5 Implementation:} Investigate the poor romaji performance (0.17 accuracy). Potential issues include:
   \begin{itemize}
   \item Encoder-only usage in current implementation vs full encoder-decoder architecture
   \item Learning rate or batch size unsuitable for byte-level models
   \item Insufficient training epochs (currently 1 epoch in quick test, 3 in full mode)
   \end{itemize}
   Implement proper T5 fine-tuning with decoder inputs or switch to ByT5-base encoder representations
-\item \textbf{Full-Scale ByT5 Training:} Train ByT5 on complete dataset with sufficient epochs to enable fair comparison with tokenized models
-\item \textbf{Compute Comprehensive Metrics:} Calculate all proposed evaluation metrics from Section~\ref{subsec:tokenization-comparison}, including OOV rates, tokenization granularity, and Cohen's Kappa
+\item \textbf{Full-Scale ByT5 Training:} Train ByT5 on complete dataset with sufficient epochs to enable hypothesis testing (H1-H3)
 \end{itemize}
 
-\subsection{Advanced Analysis}
+\subsubsection{Hypothesis Testing (Requires Working ByT5)}
 \begin{itemize}
-\item \textbf{Error Type Distribution:} Implement the 4-type taxonomy (Type A/B/C/D) to quantify when tokenized vs tokenization-free models fail
-\item \textbf{Tokenization Artifact Analysis:} 
-  \begin{itemize}
-  \item Measure [UNK] token frequency for BERT Japanese on romaji
-  \item Analyze MeCab segmentation failures on romanized text
-  \item Compare tokenization granularity (tokens/sentence) across native vs romaji for each model
-  \end{itemize}
+\item \textbf{H1 - Performance Gap:} Compare $|\Delta F_1|$ between ByT5 and tokenized models to verify if byte-level processing reduces script-invariance gap
+\item \textbf{H2 - Toxic Recall Preservation:} Measure whether ByT5 maintains higher toxic recall on romaji than tokenized models
+\item \textbf{H3 - Perturbation Resilience:} Test if ByT5 shows smaller F1 degradation under controlled romanization perturbations
 \end{itemize}
 
-\subsection{Efficiency and Deployment Metrics}
+\subsubsection{Tokenization Diagnostics}
 \begin{itemize}
-\item \textbf{Computational Cost-Benefit Analysis:} Measure inference latency, GPU memory usage, and throughput for all three models
-\item \textbf{Calculate Robustness Gain per Computational Unit:} Quantify whether ByT5's potential robustness improvements justify computational overhead
+\item \textbf{Vocabulary Analysis:} Measure OOV rates and [UNK] token frequency for BERT Japanese and mDeBERTa on romaji
+\item \textbf{Tokenization Granularity:} Calculate tokens/sentence ratios (romaji vs native) to quantify fragmentation
+\item \textbf{MeCab Segmentation Analysis:} Identify systematic MeCab failures on romanized text for BERT Japanese
+\end{itemize}
+
+\subsubsection{Cross-Architecture Analysis}
+\begin{itemize}
+\item \textbf{Prediction Agreement:} Calculate Cohen's Kappa between tokenized models and ByT5 on romaji predictions
+\item \textbf{Error Taxonomy:} Implement Type A/B/C/D categorization to quantify when tokenization vs byte-level processing fails
+\item \textbf{Computational Cost-Benefit:} Measure inference latency, GPU memory, throughput; calculate robustness gain per computational unit
 \end{itemize}
 
 \section{Expected Final Outcomes}
