@@ -7,6 +7,7 @@
 \usepackage{times}      % main text font
 \usepackage{latexsym}   % symbols for NLP-style papers
 \usepackage{url}        % for urls
+\usepackage{multirow}
 
 % --- Japanese language support ---
 \usepackage[utf8]{inputenc}
@@ -153,45 +154,48 @@ Some light sanity checks (spot-checking rows to make sure the rōmaji looks reas
 \end{itemize} 
 
 \section{Evaluation}
-\subsection{Classification Performance}
+\subsection{Robust Script Invarience}
+This section systematically evaluates toxicity classifiers for their ability to maintain high performance and consistent predictions across native-script and romanized (romaji) Japanese text. We use the following analytic procedure:
+
+\subsubsection{Classification Performance}
 \begin{itemize}
-\item F1\_native: Precision, Recall, and F1-score on the held-out native-script test set (per level and macro-averaged)
-\item F1\_rōmaji: Precision, Recall, and F1-score on the held-out rōmaji test set (per level and macro-averaged)
+\item \textbf{F1\_native:} Precision, Recall, and F1-score on the held-out native-script test set (per level and macro-averaged)
+\item \textbf{F1\_romaji:} Precision, Recall, and F1-score on the held-out romaji test set (per level and macro-averaged)
 \end{itemize}
 
-\subsection{Script-Invariance Gap}
+\subsubsection{Script-Invariance Gap}
 \begin{itemize}
-\item For each toxicity level:
-\[
-\Delta F_1 = F_{1,\text{native}} - F_{1,\text{r\={o}maji}}
-\]
-report mean $\Delta$F1 and 95\% confidence interval
-\item Label Consistency Rate: \% of test instances whose predicted label is identical in native and rōmaji forms (Flip rate = 1 - Consistency).
+    \item For each toxicity level:
+    \[
+        \Delta F_1 = F_{1,\text{native}} - F_{1,\text{r\={o}maji}}
+    \]
+    Report mean $\Delta$F1 and 95\% confidence interval.
+    \item \textbf{Label Consistency Rate:} Percentage of test instances whose predicted label is identical between native and romaji forms (Flip rate $=$ 1 $-$ Consistency).
 \end{itemize}
 
-\subsection{Statistical Significance}
+\subsubsection{Statistical Significance}
 \begin{itemize}
-\item McNemar's Test: Conduct McNemar's test on paired native versus rōmaji predictions to determine if the difference in error rates is statistically significant
+    \item \textbf{McNemar's Test:} Paired McNemar's test between native and romaji predictions to determine whether the error rate difference is statistically significant.
 \end{itemize}
 
-\subsection{Robustness to Romanization Variants}
+\subsubsection{Robustness to Romanization Variants}
 \begin{itemize}
-\item For each common perturbation (long-vowel representation, gemination, numeric leet), compute 
-\[
-\Delta F_{1,\text{variant}} = F_{1,\text{r\={o}maji}} - F_{1,\text{variant}}
-\]
-report mean and standard deviation
+    \item For each common perturbation (long-vowel representation, gemination, numeric leet), calculate:
+    \[
+        \Delta F_{1,\text{variant}} = F_{1,\text{r\={o}maji}} - F_{1,\text{variant}}
+    \]
+
 \end{itemize}
 
-\subsection{Error Analysis on Romanized Inputs}
+\subsubsection{Error Analysis on Romanized Inputs}
 \begin{itemize}
-\item High-$\Delta$F1 Case Review: Manually examine the top 50 samples with the largest native–rōmaji F1 discrepancy to identify systematic romanization failure modes
+    \item \textbf{High-$\Delta$F1 Case Review:} Manually review the top 50 samples with the largest native–romaji F1 discrepancy to identify common romanization-related prediction failures.
 \end{itemize}
 
-\subsection{Efficiency Metrics for Deployment (Optional)}
+\subsubsection{Efficiency Metrics for Deployment (Optional)}
 \begin{itemize}
-\item Inference latency (ms/sample) and throughput (samples/s) on GPU and CPU
-\item Peak GPU memory usage during batch inference
+    \item Inference latency (ms/sample) and throughput (samples/s) on GPU/CPU
+    \item Peak GPU memory usage during batch inference
 \end{itemize}
 
 \subsection{Tokenization vs Tokenization-free Model Comparison}
