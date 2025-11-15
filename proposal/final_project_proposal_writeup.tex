@@ -64,24 +64,63 @@ Separately, modern NLP offers heterogeneous modeling approaches:
 \item \textbf{Multilingual subword models} such as mDeBERTa-v3 \cite{mdebertav3model} are pre-trained on the CC100 corpus covering ~100 languages, including Japanese, offering a cross-lingual baseline.
 \item \textbf{Tokenizer-free models} such as ByT5 \cite{googlebyt5model} operate directly on raw UTF-8 bytes rather than on subword tokens, and are advertised as more robust to spelling noise and script issues.
 \end{itemize}
-However, we lack a systematic comparison of these model families on a script-controlled Japanese toxicity benchmark. This project fills that gap by building a paired native/romaji Japanese toxicity dataset and comparing how a language-specific subword model, a multilingual subword model, and a tokenizer-free byte-level model behave under script changes.
+However, we lack a systematic comparison of these model families on a script-controlled Japanese toxicity benchmark. This project fills that gap by building a paired native/rōmaji Japanese toxicity dataset and comparing how a language-specific subword model, a multilingual subword model, and a tokenizer-free byte-level model behave under script changes.
 
 \section{Technical Resources and Datasets}
 \subsection{Models}
+We plan to fine-tune and compare three transformer models that differ primarily in their tokenization strategy:
 \begin{itemize}
-\item BERT base Japanese (Hugging Face) \cite{bertjapanesemodel}
-\item Microsoft DeBERTaV3 (Hugging Face) \cite{mdebertav3model}
-\item ByT5 - Small (Hugging Face) \cite{googlebyt5model}
+\item Japanese-specific subword model (Specialist)
+\begin{itemize}
+\item \textbf{Base model}: {\fontfamily{helvet}\selectfont tohoku-nlp/bert-base-japanese-v3} \cite{bertjapanesemodel}
+\item A BERT variant pre-trained specifically on Japanese corpora, providing a strong native-script subword baseline.
 \end{itemize}
-
-\subsection{Training Datasets}
+\item Multilingual subword model (Generalist)
 \begin{itemize}
-\item llm-jp-toxicity-dataset \cite{llmjp2024toxicity}: Japanese toxicity dataset with LLM‐provided quality assessments and statistics 
-\item inspection-ai/japanese-toxic-dataset \cite{inspection2024japanese}: Contains native Japanese text with toxicity level annotations
+\item \textbf{Base model}: {\fontfamily{helvet}\selectfont microsoft/mdeberta-v3-base} \cite{mdebertav3model}
+\item A multilingual DeBERTa-v3 model trained on the CC100 corpus, representing a high-capacity subword model with broad cross-lingual coverage.
+\end{itemize}
+\item Tokenizer-free byte-level model
+\begin{itemize}
+\item \textbf{Base model}: {\fontfamily{helvet}\selectfont google/byt5-small} \cite{googlebyt5model}
+\item A byte-level T5 variant that operates directly on UTF-8 bytes instead of subword tokens, designed to be robust to spelling and script variation.
+\end{itemize}
+\end{itemize}
+Each model will be equipped with a standard classification head for strict binary toxicity prediction.
+
+\subsection{Training Datasets and Standardized Schema}
+We use two public Japanese toxicity datasets:
+\begin{itemize}
+\item llm-jp-toxicity-dataset-v2 \cite{llmjp2024toxicity}: native Japanese sentences with multi-annotator toxicity labels.
+\item inspection-ai/japanese-toxic-dataset \cite{inspection2024japanese}: native Japanese sentences with a three-way toxicity label and category flags.
 \end{itemize} 
+Both are passed through a Python script which converts them into a single standardized CSV format with:
+%{\fontfamily{tgbonum}\selectfont }
+\begin{itemize}
+\item one row per text ({\fontfamily{qcr}\selectfont id}, {\fontfamily{qcr}\selectfont text\_native}),
+\item a unified four-way fine label ({\fontfamily{qcr}\selectfont Not Toxic}, {\fontfamily{qcr}\selectfont Hard to Say}, {\fontfamily{qcr}\selectfont Toxic}, {\fontfamily{qcr}\selectfont Very Toxic}),
+\item a three-way coarse label ({\fontfamily{qcr}\selectfont NonToxic}, {\fontfamily{qcr}\selectfont Ambiguous}, {\fontfamily{qcr}\selectfont Toxic}),
+\item and lightweight metadata (category list, original labels, basic confidence).
+\end{itemize}
+Currently we are mainly working with a Binary Strict view, where we drop rows whose coarse label is {\fontfamily{qcr}\selectfont Ambiguous} and keep only clearly non-toxic vs clearly toxic examples.
+
+\subsection{Paired Native/Rōmaji Views}
+From each standardized CSV, we create a paired native/rōmaji view using another Python script. For every example that survives the Binary Strict filter, we:
+\begin{itemize}
+\item keep the original {\fontfamily{qcr}\selectfont id}, labels, and {\fontfamily{qcr}\selectfont text\_native}
+\item add a romanized version of the same text as {\fontfamily{qcr}\selectfont text\_romaji}
+\item and save one processed file per source.
+\end{itemize}
+This produces two separate processed files, one for each dataset. Each row is therefore a matched pair (native vs rōmaji) with the same label, which is exactly what we need to evaluate script robustness.
 
 \subsection{Romanization Pipeline}
-pykakasi (v2.2+) \cite{pykakasi2024} for reliable Japanese-to-romaji conversion using Hepburn romanization standard 
+We romanize Japanese using pykakasi (v2.2+) \cite{pykakasi2024} with a simple, fixed policy:
+\begin{itemize}
+\item First normalize text with Unicode NFKC.
+\item Use Hepburn-style romanization.
+\item Do not insert word separators and do not use capitalization or macrons (long vowels are rendered in plain ASCII, e.g., “ou”, “oo”).
+\end{itemize}
+This gives us deterministic, ASCII-only rōmaji that roughly matches how Japanese is often typed online, and keeps the romanization behavior consistent across all experiments.
 
 \subsection{Compute Resources}
 \begin{itemize}
@@ -91,21 +130,22 @@ pykakasi (v2.2+) \cite{pykakasi2024} for reliable Japanese-to-romaji conversion 
 
 \section{Proposed Approach}
 \subsection{Data Preprocessing and Validation}
+Our preprocessing has two separate scripted stages per dataset:
+\begin{enumerate}
+\item \textbf{Standardization}\\
+We run our data loading Python script on the raw Inspection-AI and LLM-jp files. This aligns them into the shared schema (same label space, same column names, stable IDs) and creates the coarse toxicity label we use for Binary Strict experiments.
+\item \textbf{Binary + Pairing}\\
+We then run our pairing script on each standardized CSV. This script:
 \begin{itemize}
-\item Convert Japanese datasets to romaji using pykakasi with Hepburn romanization 
-\item Manually inspect 200 random samples; record and fix conversion errors (e.g., loanwords, long vowels)
-\item Create train/validation/test splits (70/15/15) maintaining toxicity level distribution 
-\item Produce summary statistics: token counts, class distributions
+\item filters out rows with an {\fontfamily{qcr}\selectfont Ambiguous} coarse label (Binary Strict view),
+\item generates {\fontfamily{qcr}\selectfont text\_romaji} from {\fontfamily{qcr}\selectfont text\_native} using the romanization pipeline above,
+\item and writes the paired native/rōmaji CSVs in the processed data folder.
 \end{itemize}
+\end{enumerate}
+Some light sanity checks (spot-checking rows to make sure the rōmaji looks reasonable, and that IDs and labels are preserved) as a final data validation check.
 
 \subsection{Model Fine-tuning}
 \begin{itemize}
-\item Fine-tune three model architectures on binary toxicity classification:
-  \begin{itemize}
-  \item \textbf{BERT base Japanese} (tohoku-nlp/bert-base-japanese-v3): Language-specific subword model with MeCab tokenizer
-  \item \textbf{mDeBERTa-v3 base} (microsoft/mdeberta-v3-base): Multilingual subword model pre-trained on 100+ languages
-  \item \textbf{ByT5-small} (google/byt5-small): Tokenization-free byte-level encoder-decoder model
-  \end{itemize}
 \item Train each model on both native Japanese and romanized (rōmaji) text independently to measure script-invariance
 \item Implement stratified train/test split (80/20) to maintain toxicity class distribution and ensure reproducibility via fixed random seed
 \item Use standard hyperparameters: learning rate 2e-5, batch size 16, 3 epochs, AdamW optimizer, dropout 0.1
@@ -116,7 +156,7 @@ pykakasi (v2.2+) \cite{pykakasi2024} for reliable Japanese-to-romaji conversion 
 \subsection{Classification Performance}
 \begin{itemize}
 \item F1\_native: Precision, Recall, and F1-score on the held-out native-script test set (per level and macro-averaged)
-\item F1\_romaji: Precision, Recall, and F1-score on the held-out romaji test set (per level and macro-averaged)
+\item F1\_rōmaji: Precision, Recall, and F1-score on the held-out rōmaji test set (per level and macro-averaged)
 \end{itemize}
 
 \subsection{Script-Invariance Gap}
@@ -126,12 +166,12 @@ pykakasi (v2.2+) \cite{pykakasi2024} for reliable Japanese-to-romaji conversion 
 \Delta F_1 = F_{1,\text{native}} - F_{1,\text{r\={o}maji}}
 \]
 report mean $\Delta$F1 and 95\% confidence interval
-\item Label Consistency Rate: \% of test instances whose predicted label is identical in native and romaji forms (Flip rate = 1 - Consistency).
+\item Label Consistency Rate: \% of test instances whose predicted label is identical in native and rōmaji forms (Flip rate = 1 - Consistency).
 \end{itemize}
 
 \subsection{Statistical Significance}
 \begin{itemize}
-\item McNemar's Test: Conduct McNemar's test on paired native versus romaji predictions to determine if the difference in error rates is statistically significant
+\item McNemar's Test: Conduct McNemar's test on paired native versus rōmaji predictions to determine if the difference in error rates is statistically significant
 \end{itemize}
 
 \subsection{Robustness to Romanization Variants}
@@ -145,7 +185,7 @@ report mean and standard deviation
 
 \subsection{Error Analysis on Romanized Inputs}
 \begin{itemize}
-\item High-$\Delta$F1 Case Review: Manually examine the top 50 samples with the largest native–romaji F1 discrepancy to identify systematic romanization failure modes
+\item High-$\Delta$F1 Case Review: Manually examine the top 50 samples with the largest native–rōmaji F1 discrepancy to identify systematic romanization failure modes
 \end{itemize}
 
 \subsection{Efficiency Metrics for Deployment (Optional)}
