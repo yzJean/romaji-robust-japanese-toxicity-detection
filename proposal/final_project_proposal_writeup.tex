@@ -31,7 +31,7 @@
 \usepackage{caption}
 \captionsetup{font=small, labelfont=bf}
 
-\title{Final Project Proposal}
+\title{Midterm Final Project Check-in}
 \author{
 \begin{tabular}{c c c}
 YuChen (Jean) Lin & Pakhi Chatterjee & Aditya Pandey\\
@@ -66,6 +66,19 @@ Separately, modern NLP offers heterogeneous modeling approaches:
 \item \textbf{Tokenizer-free models} such as ByT5 \cite{googlebyt5model} operate directly on raw UTF-8 bytes rather than on subword tokens, and are advertised as more robust to spelling noise and script issues.
 \end{itemize}
 However, we lack a systematic comparison of these model families on a script-controlled Japanese toxicity benchmark. This project fills that gap by building a paired native/rōmaji Japanese toxicity dataset and comparing how a language-specific subword model, a multilingual subword model, and a tokenizer-free byte-level model behave under script changes.
+
+\section{Research Questions and Hypotheses}
+We focus on two central research questions:
+\begin{itemize}
+\item \textbf{Script invariance}: For Japanese toxicity detection, how does model performance change when test inputs are converted from native script to rōmaji while keeping labels fixed?
+\item \textbf{Tokenization strategy}: Do tokenizer-free/byte-level models exhibit smaller performance drops and lower “flip rates” under romanization than subword models?
+\end{itemize}
+Our hypotheses are as follows:
+\begin{itemize}
+\item \textbf{H1 - Performance Gap:} Tokenized models (BERT Japanese, mDeBERTa) will show larger $|\Delta F_1|$ than ByT5 due to tokenization mismatch on romaji
+\item \textbf{H2 - Toxic Recall Preservation:} ByT5 will maintain higher toxic recall when switching to romaji compared to tokenized models
+\item \textbf{H3 - Perturbation Resilience:} ByT5 will show smaller F1 degradation under romanization variants than tokenized models
+\end{itemize}
 
 \section{Technical Resources and Datasets}
 \subsection{Models}
@@ -155,7 +168,7 @@ Some light sanity checks (spot-checking rows to make sure the rōmaji looks reas
 
 \section{Evaluation}
 
-Our evaluation strategy has two complementary goals: (1) measure script-invariance robustness across all three models, and (2) diagnose whether tokenization is the root cause of romaji performance degradation by comparing tokenized vs tokenization-free architectures.
+Our evaluation strategy aims to validate our hypotheses and answer our research questions.
 
 \subsection{Script-Invariance Evaluation Framework}
 \label{subsec:script-invariance}
@@ -177,13 +190,6 @@ These metrics establish a baseline understanding of script-invariance performanc
 \label{subsec:tokenization-comparison}
 
 Using the metrics from Section~\ref{subsec:script-invariance}, we perform targeted comparative analysis to answer our second research question: does tokenization cause romaji performance degradation, and do byte-level models solve this problem?
-
-\subsubsection{Hypothesis Testing}
-\begin{itemize}
-\item \textbf{H1 - Performance Gap:} Tokenized models (BERT Japanese, mDeBERTa) will show larger $|\Delta F_1|$ than ByT5 due to tokenization mismatch on romaji
-\item \textbf{H2 - Toxic Recall Preservation:} ByT5 will maintain higher toxic recall when switching to romaji compared to tokenized models
-\item \textbf{H3 - Perturbation Resilience:} ByT5 will show smaller F1 degradation under romanization variants than tokenized models
-\end{itemize}
 
 \subsubsection{Tokenization Failure Diagnostics}
 
@@ -270,36 +276,6 @@ ByT5-small & Native & 0.83* & - & - & \multirow{2}{*}{TBD} \\
   \end{itemize}
 \item \textbf{ByT5 Requires Further Investigation:} Preliminary results show poor performance on romaji (0.17 accuracy), suggesting training instability or implementation issues that need debugging before we can test H1-H3
 \item \textbf{Paired Datasets Established:} Successfully created paired native/romaji datasets from both inspection-ai (310 samples, for quick prototyping) and llmjp (3847 samples, used for reported results)
-\end{itemize}
-
-\subsection{Implementation and Evaluation Progress}
-
-\textbf{Completed Deliverables:}
-\begin{itemize}
-\item Paired native-romaji Japanese toxicity benchmarks:
-  \begin{itemize}
-  \item Small-scale: inspection-ai dataset (310 samples, binary classification)
-  \item Large-scale: llmjp dataset (3847 samples, binary classification)
-  \end{itemize}
-\item Training pipeline supporting three model architectures with script selection (--use-romaji flag)
-\item Reproducible training scripts with fixed random seeds and stratified splits
-\item Model checkpoints and result files for mDeBERTa and BERT Japanese on both scripts
-\end{itemize}
-
-\textbf{Evaluation Metrics Completed} (from Section~\ref{subsec:script-invariance}):
-\begin{itemize}
-\item Per-Script Performance: Accuracy, precision, recall, F1 (per-class and macro-averaged) for mDeBERTa and BERT Japanese
-\item Script-Invariance Gap: $\Delta F_1$ = -0.12 to -0.13 for tokenized models
-\item Error Pattern Analysis: Qualitative analysis of distinct failure modes (over-prediction vs toxic recall degradation)
-\end{itemize}
-
-\textbf{Pending Evaluation} (from Section~\ref{subsec:script-invariance} and Section~\ref{subsec:tokenization-comparison}):
-\begin{itemize}
-\item Label Consistency Rate, statistical significance tests (McNemar's), perturbation robustness
-\item Tokenization diagnostics: OOV rates, [UNK] frequency, granularity ratios, MeCab segmentation analysis
-\item ByT5 training and all hypothesis testing (H1-H3)
-\item Cross-architecture analysis: Cohen's Kappa, error taxonomy (Type A/B/C/D), cost-benefit metrics
-\item Efficiency metrics (optional): Inference latency, GPU memory, throughput
 \end{itemize}
 
 \section{Future Work}
