@@ -60,21 +60,18 @@ Romanized text has been recognized as a real failure mode in other languages. Fo
 \\
 Separately, modern NLP offers heterogeneous modeling approaches:
 \begin{itemize}
-\item Language-specific subword models such as Japanese BERT (tohoku-nlp/bert-base-japanese-v3) are strong native-script baselines widely fine-tuned for Japanese tasks.
-\item 
+\item \textbf{Language-specific subword models} such as Japanese BERT \cite{bertjapanesemodel} are strong native-script baselines widely fine-tuned for Japanese tasks.
+\item \textbf{Multilingual subword models} such as mDeBERTa-v3 \cite{mdebertav3model} are pre-trained on the CC100 corpus covering ~100 languages, including Japanese, offering a cross-lingual baseline.
+\item \textbf{Tokenizer-free models} such as ByT5 \cite{googlebyt5model} operate directly on raw UTF-8 bytes rather than on subword tokens, and are advertised as more robust to spelling noise and script issues.
 \end{itemize}
-
-
-
-
-Dedicated studies on Roman Urdu hate speech demonstrate that romanization is treated as a real failure mode and provide a useful precedent \cite{mathur2020hateval}, and a recent Nature report on multilingual toxicity detection highlights the necessity of script-agnostic robustness \cite{nature2024multilingual}. Yet no equivalent work focuses on Japanese rōmaji. This project fills that gap by creating a Japanese rōmaji-robust toxicity benchmark. Consequently, there is a critical need for establishing a standardized benchmark to measure how well toxicity classifiers handle Japanese text when presented in romanized form.
-
+However, we lack a systematic comparison of these model families on a script-controlled Japanese toxicity benchmark. This project fills that gap by building a paired native/romaji Japanese toxicity dataset and comparing how a language-specific subword model, a multilingual subword model, and a tokenizer-free byte-level model behave under script changes.
 
 \section{Technical Resources and Datasets}
 \subsection{Models}
 \begin{itemize}
-\item BERT-base-multilingual-cased (Hugging Face)
-\item XLM-RoBERTa-base (Hugging Face)
+\item BERT base Japanese (Hugging Face) \cite{bertjapanesemodel}
+\item Microsoft DeBERTaV3 (Hugging Face) \cite{mdebertav3model}
+\item ByT5 - Small (Hugging Face) \cite{googlebyt5model}
 \end{itemize}
 
 \subsection{Training Datasets}
@@ -169,16 +166,16 @@ Hammad Rizwan, Muhammad Haroon Shakeel, and Asim Karim. 2020. Hate-Speech and Of
 Ashiq, W., Kanwal, S., Rafique, A. et al. Roman urdu hate speech detection using hybrid machine learning models and hyperparameter optimization. Sci Rep 14, 28590 (2024).
 \url{https://doi.org/10.1038/s41598-024-79106-7}
 
-\bibitem{bertjapanese}
-
+\bibitem{bertjapanesemodel}
+Tohoku NLP. (n.d.). \textit{bert-base-japanese-v3}. Hugging Face.\\
 \url{https://huggingface.co/tohoku-nlp/bert-base-japanese-v3}
 
-\bibitem{}
-
+\bibitem{mdebertav3model}
+Microsoft. (n.d.). \textit{mdeberta-v3-base}. Hugging Face.\\
 \url{https://huggingface.co/microsoft/mdeberta-v3-base}
 
-\bibitem{}
-
+\bibitem{googlebyt5model}
+Google. (n.d.). \textit {byt5-small}. Hugging Face.\\
 \url{https://huggingface.co/google/byt5-small}
 
 \bibitem{llmjp2024toxicity}
