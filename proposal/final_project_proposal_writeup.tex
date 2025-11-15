@@ -261,7 +261,7 @@ Finally, we need to understand where the models agree and disagree, and whether 
 This section summarizes what we have accomplished so far. We've completed the basic implementation and initial testing of our models. While we haven't finished everything we planned, we've made good progress and learned important things about how these models work with Japanese and romaji text.
 
 \subsection{Preliminary Results}
-We successfully implemented and evaluated three model architectures on paired native Japanese and romanized toxicity datasets using the llmjp dataset (955K samples total, with 80/20 train/test split resulting in ~191K test samples).
+We successfully implemented and evaluated three model architectures on paired native Japanese and romanized toxicity datasets using the llmjp dataset (3847 samples total, with 80/20 train/test split resulting in ~769 test samples).
 
 \subsubsection{Script-Invariance Performance}
 
@@ -298,7 +298,7 @@ ByT5-small & Native & 0.83* & - & - & \multirow{2}{*}{TBD} \\
   \item \textit{BERT Japanese on romaji}: High non-toxic recall (0.89) but low toxic recall (0.61) - misses 39\% of toxic content, likely due to MeCab tokenizer failures on romanized text
   \end{itemize}
 \item \textbf{ByT5 Requires Further Investigation:} Preliminary results show poor performance on romaji (0.17 accuracy), suggesting training instability or implementation issues that need debugging
-\item \textbf{Paired Datasets Established:} Successfully created paired native/romaji datasets from both inspection-ai (310 samples, for quick prototyping) and llmjp (955K samples, used for reported results)
+\item \textbf{Paired Datasets Established:} Successfully created paired native/romaji datasets from both inspection-ai (310 samples, for quick prototyping) and llmjp (3847 samples, used for reported results)
 \end{itemize}
 
 \subsection{Deliverables Completed}
@@ -306,7 +306,7 @@ ByT5-small & Native & 0.83* & - & - & \multirow{2}{*}{TBD} \\
 \item Paired native-romaji Japanese toxicity benchmarks:
   \begin{itemize}
   \item Small-scale: inspection-ai dataset (310 samples, binary classification)
-  \item Large-scale: llmjp dataset (955K samples, binary classification)
+  \item Large-scale: llmjp dataset (3847 samples, binary classification)
   \end{itemize}
 \item Training pipeline supporting three model architectures with script selection (--use-romaji flag)
 \item Reproducible training scripts with fixed random seeds and stratified splits
@@ -365,24 +365,10 @@ Once we complete all the tasks listed in the Future Work section, we expect to h
 \item \textbf{Paired Datasets:} Two-tier benchmark system with native Japanese and Hepburn romaji versions:
   \begin{itemize}
   \item Small-scale (inspection-ai): 310 samples for quick prototyping and testing
-  \item Large-scale (llmjp): 955K samples for production-grade model training
+  \item Large-scale (llmjp): 3847 samples for production-grade model training
   \end{itemize}
 \item \textbf{Model Performance Baselines:} Published results for mDeBERTa-v3, BERT Japanese, and ByT5 on both native and romaji, establishing performance expectations for future work
 \end{itemize}
-
-\subsection{Key Insights}
-\begin{itemize}
-\item \textbf{Efficiency-Robustness Trade-offs:} Quantified computational cost (inference latency, memory) vs script-invariance gains, informing deployment decisions
-\item \textbf{Architectural Recommendations:} Evidence-based guidance on when to use tokenization-free models for Japanese (and by extension, other languages with romanization)
-\item \textbf{Generalization Potential:} Insights applicable to Korean, Arabic, Hindi, and other languages where romanization creates script-invariance challenges
-\end{itemize}
-
-\subsection{Impact on Japanese NLP}
-\begin{itemize}
-\item \textbf{Moderation Fairness:} Demonstrate whether existing models systematically disadvantage users who write in romaji, highlighting gaps in current content moderation systems
-\item \textbf{Model Selection Criteria:} Provide practitioners with quantitative metrics to choose between models based on deployment context (native-only vs mixed-script environments)
-\item \textbf{Future Research Directions:} Identify remaining challenges (e.g., ByT5 training stability, perturbation robustness) to guide next-generation toxicity detection research
-\end{itemize} 
 
 \begin{thebibliography}{9}
 
