@@ -155,6 +155,7 @@ report mean and standard deviation
 \end{itemize}
 
 \subsection{Tokenization vs Tokenization-free Model Comparison}
+\label{subsec:tokenization-comparison}
 The goal is to evaluate whether tokenization-free models (ByT5) maintain better toxicity detection performance across scripts compared to tokenized models (BERT Japanese, mDeBERTa).
 
 \subsubsection{Comparative Performance Metrics}
@@ -204,11 +205,123 @@ Robustness characteristics of ByT5:
   \end{itemize}
 \end{itemize}
 
-\section{Expected Outcomes}
+\section{Actual Outcomes}
+
+This section summarizes what we have accomplished so far. We've completed the basic implementation and initial testing of our models. While we haven't finished everything we planned, we've made good progress and learned important things about how these models work with Japanese and romaji text.
+
+\subsection{Preliminary Results}
+We successfully implemented and evaluated three model architectures on paired native Japanese and romanized toxicity datasets (743 test samples). Key findings:
+
+\subsubsection{Script-Invariance Performance}
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Model} & \textbf{Script} & \textbf{Accuracy} & \textbf{Macro F1} & \textbf{Toxic Recall} & $\Delta F_1$ \\
+\midrule
+mDeBERTa-v3 & Native & 0.91 & 0.90 & 0.87 & \multirow{2}{*}{-0.13} \\
+            & Romaji & 0.77 & 0.77 & 0.90 & \\
+\midrule
+BERT Japanese & Native & 0.88 & 0.88 & 0.98 & \multirow{2}{*}{-0.12} \\
+              & Romaji & 0.78 & 0.76 & 0.61 & \\
+\midrule
+ByT5-small & Native & 0.83* & - & - & \multirow{2}{*}{TBD} \\
+           & Romaji & 0.17* & - & - & \\
+\bottomrule
+\multicolumn{6}{l}{\footnotesize *Quick test mode (50 samples, 1 epoch) - full evaluation pending}
+\end{tabular}
+\caption{Model performance on native Japanese vs romaji toxicity detection}
+\label{tab:results}
+\end{table}
+
+\subsubsection{Key Findings}
 \begin{itemize}
-\item A paired, script-controlled benchmark for Japanese toxicity detection
-\item A drop-in training recipe (romanization + consistency loss) that reduces flip rate without sacrificing F1
-\item Reproducible code and dataset construction scripts for future Japanese moderation research (and portability to other languages with romanization)
+\item \textbf{Tokenized Models Show Script Degradation:} Both mDeBERTa and BERT Japanese experience 12-13 point drops in macro F1 when switching from native to romaji ($\Delta F_1 \approx -0.12$), confirming our hypothesis about tokenization-induced brittleness
+\item \textbf{Different Failure Modes:}
+  \begin{itemize}
+  \item \textit{mDeBERTa on romaji}: Low non-toxic recall (0.69) but high toxic recall (0.90) - tends to over-predict toxicity
+  \item \textit{BERT Japanese on romaji}: High non-toxic recall (0.89) but low toxic recall (0.61) - misses 39\% of toxic content, likely due to MeCab tokenizer failures on romanized text
+  \end{itemize}
+\item \textbf{ByT5 Requires Further Investigation:} Preliminary results show poor performance on romaji (0.17 accuracy), suggesting training instability or implementation issues that need debugging
+\item \textbf{Paired Dataset Established:} Successfully created 743-sample paired native/romaji test set enabling direct script-invariance evaluation
+\end{itemize}
+
+\subsection{Deliverables Completed}
+\begin{itemize}
+\item Paired native-romaji Japanese toxicity benchmark (inspection-ai dataset, binary classification)
+\item Training pipeline supporting three model architectures with script selection (--use-romaji flag)
+\item Reproducible training scripts with fixed random seeds and stratified splits
+\item Comprehensive evaluation metrics: accuracy, precision, recall, F1 (per-class and macro-averaged), confusion matrices
+\item Model checkpoints and result files for mDeBERTa and BERT Japanese on both scripts
+\end{itemize}
+
+\section{Future Work}
+
+We still have several important tasks to finish before we can fully answer our research questions. This section outlines what we need to do next, organized by priority. The main challenge is getting ByT5 to work properly so we can compare it fairly with the other models.
+
+To complete the research objectives outlined in this proposal, the following tasks remain:
+
+\subsection{Immediate Priorities}
+\begin{itemize}
+\item \textbf{Debug ByT5 Training:} Investigate the poor romaji performance (0.17 accuracy). Potential issues include:
+  \begin{itemize}
+  \item Encoder-only usage in current implementation vs full encoder-decoder architecture
+  \item Learning rate or batch size unsuitable for byte-level models
+  \item Insufficient training epochs (currently 1 epoch in quick test, 3 in full mode)
+  \end{itemize}
+  Implement proper T5 fine-tuning with decoder inputs or switch to ByT5-base encoder representations
+\item \textbf{Full-Scale ByT5 Training:} Train ByT5 on complete dataset with sufficient epochs to enable fair comparison with tokenized models
+\item \textbf{Compute Comprehensive Metrics:} Calculate all proposed evaluation metrics from Section~\ref{subsec:tokenization-comparison}, including OOV rates, tokenization granularity, and Cohen's Kappa
+\end{itemize}
+
+\subsection{Advanced Analysis}
+\begin{itemize}
+\item \textbf{Error Type Distribution:} Implement the 4-type taxonomy (Type A/B/C/D) to quantify when tokenized vs tokenization-free models fail
+\item \textbf{Tokenization Artifact Analysis:} 
+  \begin{itemize}
+  \item Measure [UNK] token frequency for BERT Japanese on romaji
+  \item Analyze MeCab segmentation failures on romanized text
+  \item Compare tokenization granularity (tokens/sentence) across native vs romaji for each model
+  \end{itemize}
+\end{itemize}
+
+\subsection{Efficiency and Deployment Metrics}
+\begin{itemize}
+\item \textbf{Computational Cost-Benefit Analysis:} Measure inference latency, GPU memory usage, and throughput for all three models
+\item \textbf{Calculate Robustness Gain per Computational Unit:} Quantify whether ByT5's potential robustness improvements justify computational overhead
+\end{itemize}
+
+\section{Expected Final Outcomes}
+
+Once we complete all the tasks listed in the Future Work section, we expect to have clear answers to our research questions. This section describes what we hope to achieve and how our work will contribute to Japanese NLP research and practical toxicity detection systems.
+
+\subsection{Research Contributions}
+\begin{itemize}
+\item \textbf{Script-Invariance Benchmark:} First comprehensive paired native/romaji evaluation for Japanese toxicity detection, demonstrating whether current models maintain fairness across script changes
+\item \textbf{Tokenization vs Tokenization-free Comparison:} Quantitative evidence on whether byte-level models (ByT5) outperform subword tokenized models (BERT Japanese, mDeBERTa) on romanized text
+\item \textbf{Failure Mode Taxonomy:} Systematic characterization of when and why tokenization breaks down on romaji (MeCab segmentation errors, OOV rates, [UNK] tokens) vs when byte-level processing fails
+\end{itemize}
+
+\subsection{Practical Deliverables}
+\begin{itemize}
+\item \textbf{Reproducible Training Pipeline:} Open-source code supporting multiple model architectures with script selection, enabling researchers to extend this work
+\item \textbf{Paired Dataset:} 743-sample (expandable to larger datasets) benchmark with native Japanese and Hepburn romaji versions for controlled script-invariance testing
+\item \textbf{Model Performance Baselines:} Published results for mDeBERTa-v3, BERT Japanese, and ByT5 on both native and romaji, establishing performance expectations for future work
+\end{itemize}
+
+\subsection{Key Insights}
+\begin{itemize}
+\item \textbf{Efficiency-Robustness Trade-offs:} Quantified computational cost (inference latency, memory) vs script-invariance gains, informing deployment decisions
+\item \textbf{Architectural Recommendations:} Evidence-based guidance on when to use tokenization-free models for Japanese (and by extension, other languages with romanization)
+\item \textbf{Generalization Potential:} Insights applicable to Korean, Arabic, Hindi, and other languages where romanization creates script-invariance challenges
+\end{itemize}
+
+\subsection{Impact on Japanese NLP}
+\begin{itemize}
+\item \textbf{Moderation Fairness:} Demonstrate whether existing models systematically disadvantage users who write in romaji, highlighting gaps in current content moderation systems
+\item \textbf{Model Selection Criteria:} Provide practitioners with quantitative metrics to choose between models based on deployment context (native-only vs mixed-script environments)
+\item \textbf{Future Research Directions:} Identify remaining challenges (e.g., ByT5 training stability, perturbation robustness) to guide next-generation toxicity detection research
 \end{itemize} 
 
 \begin{thebibliography}{9}
