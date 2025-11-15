@@ -147,7 +147,7 @@ This gives us deterministic, ASCII-only rōmaji that roughly matches how Japanes
 Our preprocessing has two separate scripted stages per dataset:
 \begin{enumerate}
 \item \textbf{Standardization}\\
-We run our data loading Python script on the raw Inspection-AI and LLM-jp files. This aligns them into the shared schema (same label space, same column names, stable IDs) and creates the coarse toxicity label we use for Binary Strict experiments.
+This is explained in detail under Section 5.2 and 5.3
 \item \textbf{Binary + Pairing}\\
 We then run our pairing script on each standardized CSV. This script:
 \begin{itemize}
@@ -304,12 +304,8 @@ We still have several important tasks to finish before we can fully answer our r
 \item \textbf{Full-Scale ByT5 Training:} Train ByT5 on complete dataset with sufficient epochs to enable hypothesis testing (H1-H3)
 \end{itemize}
 
-\subsubsection{Hypothesis Testing (Requires Working ByT5)}
-\begin{itemize}
-\item \textbf{H1 - Performance Gap:} Compare $|\Delta F_1|$ between ByT5 and tokenized models to verify if byte-level processing reduces script-invariance gap
-\item \textbf{H2 - Toxic Recall Preservation:} Measure whether ByT5 maintains higher toxic recall on romaji than tokenized models
-\item \textbf{H3 - Perturbation Resilience:} Test if ByT5 shows smaller F1 degradation under controlled romanization perturbations
-\end{itemize}
+\subsubsection{Hypothesis Testing}
+We need to validate the hypothesis on ByT5 model because the current implementation only focuses on the tokenized models.
 
 \subsubsection{Tokenization Diagnostics}
 \begin{itemize}
@@ -327,11 +323,11 @@ We still have several important tasks to finish before we can fully answer our r
 
 \section{Expected Final Outcomes}
 
-Once we complete all the tasks listed in the Future Work section, we expect to have clear answers to our research questions. This section describes what we hope to achieve and how our work will contribute to Japanese NLP research and practical toxicity detection systems.
+This section describes what we hope to achieve by answering our research questions and how our work will contribute to Japanese NLP researhc and practical toxicity detection systems.
 
 \subsection{Research Contributions}
 \begin{itemize}
-\item \textbf{Script-Invariance Benchmark:} First comprehensive paired native/romaji evaluation for Japanese toxicity detection, demonstrating whether current models maintain fairness across script changes
+\item \textbf{Script-Invariance Benchmark:} Comprehensive paired native/romaji evaluation for Japanese toxicity detection, demonstrating whether current models maintain fairness across script changes
 \item \textbf{Tokenization vs Tokenization-free Comparison:} Quantitative evidence on whether byte-level models (ByT5) outperform subword tokenized models (BERT Japanese, mDeBERTa) on romanized text
 \item \textbf{Failure Mode Taxonomy:} Systematic characterization of when and why tokenization breaks down on romaji (MeCab segmentation errors, OOV rates, [UNK] tokens) vs when byte-level processing fails
 \end{itemize}
