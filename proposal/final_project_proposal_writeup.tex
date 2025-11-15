@@ -152,7 +152,57 @@ report mean and standard deviation
 \begin{itemize}
 \item Inference latency (ms/sample) and throughput (samples/s) on GPU and CPU
 \item Peak GPU memory usage during batch inference
-\end{itemize} 
+\end{itemize}
+
+\subsection{Tokenization vs Tokenization-free Model Comparison}
+The goal is to evaluate whether tokenization-free models (ByT5) maintain better toxicity detection performance across scripts compared to tokenized models (BERT Japanese, mDeBERTa).
+
+\subsubsection{Comparative Performance Metrics}
+\begin{itemize}
+\item \textbf{Script-Invariance Gap:} For each model, compute $\Delta F_1 = F_{1,\text{native}} - F_{1,\text{romaji}}$. Compare:
+  \begin{itemize}
+  \item Tokenized models (BERT Japanese, mDeBERTa): Expected larger $|\Delta F_1|$ due to tokenization mismatch on romaji
+  \item Tokenization-free (ByT5): Expected smaller $|\Delta F_1|$ due to byte-level robustness
+  \end{itemize}
+\item \textbf{Toxic Recall Degradation:} Measure $\Delta \text{Recall}_{\text{toxic}} = \text{Recall}_{\text{native}} - \text{Recall}_{\text{romaji}}$ to assess which architecture better preserves toxic detection capability across scripts
+\item \textbf{Macro-averaged F1 Comparison:} Report macro F1 on romaji test set for all three models to directly compare overall performance on romanized text
+\end{itemize}
+
+\subsubsection{Tokenized Model Diagnostic Metrics}
+Specific failure modes for BERT Japanese and mDeBERTa on romaji:
+\begin{itemize}
+\item \textbf{Out-of-Vocabulary (OOV) Rate:} Percentage of romaji tokens not in the model's vocabulary
+\item \textbf{Unknown Token Frequency:} Count of [UNK] tokens per sentence when processing romaji text
+\item \textbf{Tokenization Granularity:} Average tokens per sentence (native vs romaji) to quantify fragmentation
+\item \textbf{MeCab Fragmentation Examples:} For BERT Japanese, identify cases where MeCab incorrectly segments romaji
+\end{itemize}
+
+\subsubsection{Tokenization-free Model Advantage Metrics}
+Robustness characteristics of ByT5:
+\begin{itemize}
+\item \textbf{Perturbation Resilience:} Introduce controlled noise (typos, spacing variations, vowel length ambiguity) to romaji. Measure F1 degradation: $\Delta F_{1,\text{perturbed}} = F_{1,\text{clean}} - F_{1,\text{noisy}}$. Hypothesis: ByT5 shows minimal degradation
+\item \textbf{Character-level Robustness:} Test on romanization variants (e.g., "ou" vs "ō", "kka" vs "kka"). Compare error rates across model types
+\end{itemize}
+
+\subsubsection{Cross-Architecture Analysis}
+\begin{itemize}
+\item \textbf{Prediction Agreement:} Calculate Cohen's Kappa between each tokenized model and ByT5 on romaji predictions. Kappa values: $\kappa < 0.6$ indicates moderate or lower agreement, suggesting tokenization-induced prediction differences; $\kappa > 0.8$ indicates substantial agreement, suggesting tokenization is not the primary factor affecting predictions
+\item \textbf{Error Type Distribution and Pattern Analysis:} For romaji test set, categorize errors into four types:
+  \begin{itemize}
+  \item Type A: Both tokenized and tokenization-free models correct
+  \item Type B: Tokenized models fail, ByT5 succeeds (tokenization failure)
+  \item Type C: ByT5 fails, tokenized models succeed (byte-level limitation)
+  \item Type D: Both fail (inherently difficult samples)
+  \end{itemize}
+  Report percentage distribution and analyze Type B vs Type C ratio. For Type B and Type C cases, conduct qualitative analysis to identify systematic patterns (e.g., linguistic features, token characteristics, sequence length) that distinguish when tokenization vs byte-level processing fails
+\item \textbf{Computational Cost-Benefit Analysis:}
+  \begin{itemize}
+  \item Inference latency (ms): median and 95th percentile across 1000 samples
+  \item GPU memory usage (MB): peak allocation during batch inference (batch size = 16)
+  \item Throughput (samples/second): processing speed on full test set
+  \item Robustness gain per computational unit: $\frac{\Delta F_1 \text{ improvement}}{\text{inference time ratio}}$ comparing ByT5 to fastest tokenized model. Higher value indicates better efficiency trade-off (more robustness improvement per unit of computational cost); lower value indicates worse trade-off (expensive computational cost for small gains)
+  \end{itemize}
+\end{itemize}
 
 \section{Expected Outcomes}
 \begin{itemize}
