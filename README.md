@@ -32,3 +32,38 @@ To exit the virtual environment:
 ```bash
 deactivate
 ```
+
+## Testing
+
+The project includes a comprehensive test suite to ensure code quality and correctness.
+
+### Running Tests
+
+To run all tests:
+```bash
+python3 tests/run_tests.py
+```
+
+Or run individual test files:
+```bash
+python3 tests/test_utils.py
+python3 tests/test_data_loading.py
+```
+
+### Test Coverage
+
+The test suite includes:
+- **Unit tests for utility functions** (`tests/test_utils.py`)
+  - Dataset creation and initialization
+  - Data loading and preprocessing
+  - Model prediction functions
+  - Model type detection
+  - Trainer initialization
+
+- **Integration tests for data processing** (`tests/test_data_loading.py`)
+  - Inspection AI data adaptation
+  - LLM-JP data adaptation
+  - Label mapping and tie-breaking logic
+  - Category handling
+
+**Note**: Some tests require PyTorch and pandas to be installed. Tests that require these dependencies will be automatically skipped if they are not available. The data processing tests can run without these heavy dependencies.
