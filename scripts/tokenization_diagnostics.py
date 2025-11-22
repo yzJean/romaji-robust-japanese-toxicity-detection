@@ -242,20 +242,34 @@ def main():
     n01 = int(np.sum(native_correct & (~romaji_correct)))
     n10 = int(np.sum((~native_correct) & romaji_correct))
     n11 = int(np.sum((~native_correct) & (~romaji_correct)))
+    print(
+        f"Contingency Table:\n"
+        f"                    Romaji Correct    Romaji Wrong\n"
+        f"Native Correct          {n00}               {n01}\n"
+        f"Native Wrong            {n10}               {n11}\n"
+    )
 
     # McNemar exact p-value via binomial test if scipy available
     mcnemar_p = None
-    try:
-        from scipy.stats import binom_test
+    b = n01
+    n = n01 + n10
 
-        b = n01
-        n = n01 + n10
-        if n > 0:
-            # two-sided exact
-            mcnemar_p = float(binom_test(b, n, p=0.5, alternative="two-sided"))
-        else:
-            mcnemar_p = None
-    except Exception:
+    if n > 0:
+        # Try new scipy API (>= 1.7)
+        from scipy.stats import binomtest
+
+        result = binomtest(b, n, p=0.5, alternative="two-sided")
+        mcnemar_p = float(result.pvalue)
+
+        # Display results
+        if mcnemar_p is not None:
+            if mcnemar_p < 0.001:
+                p_display = f"p < 0.001 (p = {mcnemar_p:.2e})"
+            else:
+                p_display = f"p = {mcnemar_p:.6f}"
+            print(f"McNemar's test: n01={n01}, n10={n10}, {p_display}")
+    else:
+        print(f"McNemar's test skipped: no disagreements (n01={n01}, n10={n10})")
         mcnemar_p = None
 
     results = {
@@ -274,6 +288,20 @@ def main():
         "flip_counts": flip_counts_serializable,
         "contingency": {"n00": n00, "n01": n01, "n10": n10, "n11": n11},
         "mcnemar_p_value": mcnemar_p,
+        "mcnemar_significant": mcnemar_p < 0.05 if mcnemar_p is not None else None,
+        "mcnemar_interpretation": (
+            "highly significant (p < 0.001)"
+            if mcnemar_p is not None and mcnemar_p < 0.001
+            else (
+                "significant (p < 0.05)"
+                if mcnemar_p is not None and mcnemar_p < 0.05
+                else (
+                    "not significant (p >= 0.05)"
+                    if mcnemar_p is not None
+                    else "not computed"
+                )
+            )
+        ),
     }
 
     # Optionally include top-k flip examples for manual inspection
