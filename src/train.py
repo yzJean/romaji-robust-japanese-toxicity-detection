@@ -17,7 +17,18 @@ Usage:
 """
 
 import argparse
+import os
+import sys
+
+# If the user requested deterministic behavior via --deterministic we must set
+# the cuBLAS workspace config BEFORE CUDA (and thus PyTorch) initializes.
+# Check for the flag early on the raw argv and set the env var accordingly.
+if "--deterministic" in sys.argv:
+    # Use a safe workspace configuration recommended by PyTorch/NVIDIA docs
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+
 import torch
+import random
 import logging
 import numpy as np
 from utils import load_data, SimpleToxicityDataset, SimpleBertClassifier, SimpleTrainer
@@ -102,6 +113,19 @@ def parse_args():
         help="Quick test mode: use only 50 samples, 1 epoch, smaller batch size",
     )
 
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducibility",
+    )
+
+    parser.add_argument(
+        "--deterministic",
+        action="store_true",
+        help="Enable deterministic training (may require setting CUBLAS_WORKSPACE_CONFIG).",
+    )
+
     return parser.parse_args()
 
 
@@ -114,6 +138,29 @@ def main():
     # Device setup
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
+
+    # Set seeds for reproducibility
+    seed = int(args.seed)
+    logger.info(f"Setting random seed: {seed}")
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+    # Make cuDNN deterministic only when requested (may impact performance)
+    if args.deterministic:
+        try:
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+        except Exception:
+            pass
+        # Prefer deterministic algorithms when available (may raise on some ops)
+        try:
+            torch.use_deterministic_algorithms(True)
+        except Exception:
+            # Older PyTorch versions may not support this API
+            pass
 
     # Model selection logic
     if args.model_type == "mdeberta":
@@ -161,8 +208,8 @@ def main():
         test_sample_size = max(10, args.sample_size // 4)  # At least 10 test samples
         test_texts = test_texts[:test_sample_size]
         test_labels = test_labels[:test_sample_size]
-        print(f"test_texts: {test_texts}")
-        print(f"test_labels: {test_labels}")
+        # print(f"test_texts: {test_texts}")
+        # print(f"test_labels: {test_labels}")
         logger.info(
             f"Data size limited: {original_size} → {len(train_texts)} train samples"
         )
@@ -186,15 +233,31 @@ def main():
         test_texts, test_labels, tokenizer, args.max_length
     )
 
-    # Create dataloaders
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    # Create deterministic generator for DataLoader shuffling
+    dl_generator = torch.Generator()
+    dl_generator.manual_seed(seed)
+
+    # Create dataloaders (pass generator to ensure deterministic shuffling)
+    train_loader = DataLoader(
+        train_dataset, batch_size=args.batch_size, shuffle=True, generator=dl_generator
+    )
+    test_loader = DataLoader(
+        test_dataset, batch_size=args.batch_size, shuffle=False, generator=dl_generator
+    )
 
     logger.info(f"Train batches: {len(train_loader)}, Test batches: {len(test_loader)}")
 
     # Create model
     logger.info("Creating BERT model...")
-    model = SimpleBertClassifier(args.model_name, dropout=args.dropout)
+    # Use float32 for deterministic mode to avoid NaN issues with mixed precision
+    use_float32 = args.deterministic
+    if use_float32:
+        logger.info(
+            "Deterministic mode enabled: using float32 to avoid numerical instability"
+        )
+    model = SimpleBertClassifier(
+        args.model_name, dropout=args.dropout, use_float32=use_float32
+    )
 
     # Create trainer
     trainer = SimpleTrainer(model, device, args.learning_rate)
@@ -270,7 +333,7 @@ def main():
     import json
 
     # Create safe filename from model name
-    safe_model_name = args.model_name.replace("/", "_").replace("-", "_")
+    safe_model_name = args.model_type
     # Add romaji tag if using romanized text
     romaji_tag = "_romaji" if args.use_romaji else ""
     results_path = os.path.join(

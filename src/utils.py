@@ -59,12 +59,14 @@ class SimpleToxicityDataset(Dataset):
 
 class SimpleBertClassifier(nn.Module):
     """Simple transformer classifier for binary toxicity detection.
-    Supports encoder-only models (mDeBERTa-v3, BERT Japanese) and encoder-decoder models (ByT5)."""
+    Supports encoder-only models (mDeBERTa-v3, BERT Japanese) and encoder-decoder models (ByT5).
+    """
 
     def __init__(
         self,
         model_name: str = "microsoft/mdeberta-v3-base",
         dropout: float = 0.1,
+        use_float32: bool = False,
     ):
         super().__init__()
 
@@ -74,8 +76,15 @@ class SimpleBertClassifier(nn.Module):
         # Loading large transformer weights can momentarily spike CPU memory usage.
         # low_cpu_mem_usage streams the weights in and keeps peak memory low. We
         # fall back gracefully if this transformers version does not support it.
+        # When use_float32 is True (e.g., for deterministic training), we force float32
+        # to avoid numerical instability issues that can occur with float16.
+        if use_float32:
+            dtype = torch.float32
+        else:
+            dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+
         load_kwargs = {
-            "torch_dtype": torch.float16 if torch.cuda.is_available() else torch.float32,
+            "torch_dtype": dtype,
             "low_cpu_mem_usage": True,
         }
 
@@ -110,10 +119,24 @@ class SimpleBertClassifier(nn.Module):
                 # Some CPU builds cannot handle float16 weights; retry with float32.
                 load_kwargs["torch_dtype"] = torch.float32
                 self.transformer = AutoModel.from_pretrained(model_name, **load_kwargs)
+
+            # Create classifier and dropout for encoder-only models
             self.dropout = nn.Dropout(dropout)
-            self.classifier = nn.Linear(
-                self.transformer.config.hidden_size, 2
-            )  # Binary classification
+            self.classifier = nn.Linear(self.transformer.config.hidden_size, 2)
+
+            # Ensure classifier parameters use the same dtype as the transformer
+            # (transformers may be loaded in float16 on GPU while new nn.Linear defaults to float32).
+            try:
+                param_dtype = next(self.transformer.parameters()).dtype
+            except StopIteration:
+                param_dtype = torch.float32
+
+            # Cast classifier parameters to transformer dtype to avoid dtype mismatch at runtime
+            try:
+                self.classifier = self.classifier.to(dtype=param_dtype)
+            except Exception:
+                # If casting fails for any reason, leave classifier as-is and allow runtime error to surface
+                pass
 
         # Determine model type for logging
         if "mdeberta" in model_name.lower():
@@ -139,7 +162,9 @@ class SimpleBertClassifier(nn.Module):
             return outputs.logits
         else:
             # Encoder-only models
-            outputs = self.transformer(input_ids=input_ids, attention_mask=attention_mask)
+            outputs = self.transformer(
+                input_ids=input_ids, attention_mask=attention_mask
+            )
 
             # Use [CLS] token representation
             pooled_output = outputs.last_hidden_state[:, 0, :]
