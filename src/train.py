@@ -270,7 +270,7 @@ def main():
     import json
 
     # Create safe filename from model name
-    safe_model_name = args.model_name.replace("/", "_").replace("-", "_")
+    safe_model_name = args.model_type
     # Add romaji tag if using romanized text
     romaji_tag = "_romaji" if args.use_romaji else ""
     results_path = os.path.join(
