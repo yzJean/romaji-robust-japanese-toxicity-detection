@@ -177,11 +177,26 @@ class SimpleBertClassifier(nn.Module):
 class SimpleTrainer:
     """Simple trainer for quick model verification."""
 
-    def __init__(self, model, device, learning_rate: float = 2e-5):
+    def __init__(self, model, device, learning_rate: float = 2e-5, class_weights=None, max_grad_norm: float = 1.0, gradient_accumulation_steps: int = 1):
         self.model = model.to(device)
         self.device = device
         self.optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
-        self.criterion = nn.CrossEntropyLoss()
+        self.max_grad_norm = max_grad_norm
+        self.gradient_accumulation_steps = gradient_accumulation_steps
+        
+        # Apply class weights if provided to handle imbalanced datasets
+        if class_weights is not None:
+            class_weights = torch.FloatTensor(class_weights).to(device)
+            # Match dtype with model parameters to avoid dtype mismatch
+            try:
+                model_dtype = next(model.parameters()).dtype
+                class_weights = class_weights.to(dtype=model_dtype)
+            except StopIteration:
+                pass
+            self.criterion = nn.CrossEntropyLoss(weight=class_weights)
+            logger.info(f"Using weighted loss with class weights: {class_weights.cpu().float().numpy()}")
+        else:
+            self.criterion = nn.CrossEntropyLoss()
 
     def train_epoch(self, dataloader):
         self.model.train()
@@ -189,20 +204,28 @@ class SimpleTrainer:
         correct = 0
         total = 0
 
-        for batch in tqdm(dataloader, desc="Training"):
+        for batch_idx, batch in enumerate(tqdm(dataloader, desc="Training")):
             input_ids = batch["input_ids"].to(self.device)
             attention_mask = batch["attention_mask"].to(self.device)
             labels = batch["label"].to(self.device)
 
-            self.optimizer.zero_grad()
-
             logits = self.model(input_ids, attention_mask)
             loss = self.criterion(logits, labels)
-
+            
+            # Scale loss for gradient accumulation
+            loss = loss / self.gradient_accumulation_steps
             loss.backward()
-            self.optimizer.step()
+            
+            # Only update weights every gradient_accumulation_steps
+            if (batch_idx + 1) % self.gradient_accumulation_steps == 0:
+                # Clip gradients to prevent exploding gradients and NaN loss
+                if self.max_grad_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+                
+                self.optimizer.step()
+                self.optimizer.zero_grad()
 
-            total_loss += loss.item()
+            total_loss += loss.item() * self.gradient_accumulation_steps
 
             # Calculate accuracy
             _, predicted = torch.max(logits.data, 1)

@@ -30,7 +30,20 @@ if "--deterministic" in sys.argv:
 import torch
 import random
 import logging
-import numpy as np
+
+# Use CuPy if CUDA is available, otherwise fall back to NumPy
+try:
+    import cupy as cp
+    if torch.cuda.is_available():
+        np = cp
+        print("Using CuPy for GPU-accelerated array operations")
+    else:
+        import numpy as np
+        print("CUDA not available, using NumPy")
+except ImportError:
+    import numpy as np
+    print("CuPy not installed, using NumPy")
+
 from utils import load_data, SimpleToxicityDataset, SimpleBertClassifier, SimpleTrainer
 import sentencepiece
 from transformers import AutoTokenizer
@@ -71,6 +84,11 @@ def parse_args():
 
     parser.add_argument(
         "--batch-size", type=int, default=16, help="Training batch size"
+    )
+
+    parser.add_argument(
+        "--gradient-accumulation-steps", type=int, default=1, 
+        help="Number of gradient accumulation steps (simulates larger batch size)"
     )
 
     parser.add_argument(
@@ -172,6 +190,19 @@ def main():
     elif args.model_type == "byt5":
         args.model_name = "google/byt5-small"
         logger.info("Selected ByT5-small byte-level model")
+        # ByT5 requires longer training due to byte-level processing
+        if args.epochs == 3:  # Only adjust if using default epochs
+            args.epochs = 10  # Increased from 8 for better convergence
+            logger.info("ByT5 detected: increasing epochs to 10 (byte-level models need longer training)")
+        # Reduce batch size and max_length for ByT5 to fit in GPU memory
+        if args.batch_size == 16:
+            args.batch_size = 8  # Increased from 4
+            args.gradient_accumulation_steps = 2  # Effective batch size 16
+            logger.info("ByT5 detected: batch size 8 with 2 gradient accumulation steps")
+        # Reduce max_length for ByT5 (byte-level is more memory intensive)
+        if args.max_length == 512:
+            args.max_length = 256
+            logger.info("ByT5 detected: reducing max_length to 256 bytes (sufficient for most Japanese text)")
     else:
         # Default to mDeBERTa if no model specified
         args.model_name = "microsoft/mdeberta-v3-base"
@@ -247,20 +278,59 @@ def main():
 
     logger.info(f"Train batches: {len(train_loader)}, Test batches: {len(test_loader)}")
 
+    # Calculate class weights to handle imbalanced datasets
+    from sklearn.utils.class_weight import compute_class_weight
+    
+    # Convert to NumPy for sklearn compatibility
+    if np.__name__ == 'cupy':
+        train_labels_np = np.asnumpy(train_labels) if hasattr(train_labels, '__array_interface__') else np.array(train_labels).get()
+    else:
+        train_labels_np = np.array(train_labels)
+    
+    unique_labels = np.unique(train_labels_np) if np.__name__ != 'cupy' else __import__('numpy').unique(train_labels_np)
+    class_weights = compute_class_weight('balanced', classes=unique_labels, y=train_labels_np)
+    
+    # Get class distribution using the appropriate numpy
+    if np.__name__ == 'cupy':
+        import numpy as numpy_lib
+        counts = numpy_lib.unique(train_labels_np, return_counts=True)
+    else:
+        counts = np.unique(train_labels_np, return_counts=True)
+    
+    logger.info(f"Class distribution: {dict(zip(*counts))}")
+    logger.info(f"Computed class weights: {dict(zip(unique_labels, class_weights))}")
+
     # Create model
     logger.info("Creating BERT model...")
-    # Use float32 for deterministic mode to avoid NaN issues with mixed precision
-    use_float32 = args.deterministic
+    # Use float32 for deterministic mode or ByT5 to avoid NaN issues with mixed precision
+    # ByT5 in float16 can have numerical instability with weighted loss
+    use_float32 = args.deterministic or args.model_type == "byt5"
     if use_float32:
-        logger.info(
-            "Deterministic mode enabled: using float32 to avoid numerical instability"
-        )
+        if args.deterministic:
+            logger.info(
+                "Deterministic mode enabled: using float32 to avoid numerical instability"
+            )
+        if args.model_type == "byt5":
+            logger.info(
+                "ByT5 model: using float32 to avoid NaN loss with weighted loss function"
+            )
     model = SimpleBertClassifier(
         args.model_name, dropout=args.dropout, use_float32=use_float32
     )
 
-    # Create trainer
-    trainer = SimpleTrainer(model, device, args.learning_rate)
+    # Lower learning rate for ByT5 to prevent instability
+    learning_rate = args.learning_rate
+    if args.model_type == "byt5" and learning_rate == 2e-5:
+        learning_rate = 1e-5  # Adjusted from 5e-6 for better convergence
+        logger.info(f"ByT5 detected: setting learning rate to {learning_rate} for optimal convergence")
+
+    # Create trainer with class weights and gradient clipping
+    trainer = SimpleTrainer(
+        model, device, learning_rate, 
+        class_weights=class_weights, 
+        max_grad_norm=1.0,
+        gradient_accumulation_steps=args.gradient_accumulation_steps
+    )
 
     # Training loop
     logger.info(f"Starting training for {args.epochs} epochs...")
@@ -321,12 +391,20 @@ def main():
     cm = confusion_matrix(true_labels, predictions)
     print(cm)
 
+    # Convert confusion matrix to list for JSON serialization
+    if hasattr(cm, 'get'):
+        # CuPy array
+        cm_list = cm.get().tolist()
+    else:
+        # NumPy array
+        cm_list = cm.tolist()
+
     # Save results
     results = {
         "test_accuracy": test_acc,
         "best_val_accuracy": best_val_acc,
         "classification_report": report,
-        "confusion_matrix": cm.tolist(),
+        "confusion_matrix": cm_list,
         "config": vars(args),
     }
 

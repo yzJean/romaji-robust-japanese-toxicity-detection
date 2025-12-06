@@ -1,30 +1,31 @@
 #!/usr/bin/env python3
-"""Train and compare a subword tokenizer model vs the byte-level ByT5 model.
+"""Train and compare a subword tokenizer model vs the byte-level ByT5 model with script-invariance evaluation.
 
-This script reuses the processed binary toxicity data pipeline and trains two
-models sequentially:
+This script trains models on both native Japanese and romanized text, then compares:
   1. A baseline subword tokenizer model (default mDeBERTa-v3).
   2. A tokenizer-free byte-level model (google/byt5-small).
 
-Both models share the same train/test split to enable an apples-to-apples
-comparison. Results (metrics + checkpoints) are stored under the configured
-output directory.
+For each model, trains on both native and romaji to compute script-invariance metrics.
+Results (metrics + checkpoints) are stored under the configured output directory.
 """
 
 import argparse
 import json
 import os
 import random
+import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List, Tuple
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from torch.optim import AdamW
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
+from scipy.stats import chi2
 
 from utils import load_data, SimpleToxicityDataset
 
@@ -153,7 +154,107 @@ def evaluate(model, loader, device) -> Dict:
         "accuracy": accuracy,
         "report": report,
         "confusion_matrix": cm,
+        "predictions": all_preds,
+        "labels": all_labels,
     }
+
+
+def compute_script_invariance(native_preds: List[int], romaji_preds: List[int], 
+                               labels: List[int]) -> Dict:
+    """Compute script-invariance metrics between native and romaji predictions."""
+    native_preds = np.array(native_preds)
+    romaji_preds = np.array(romaji_preds)
+    labels = np.array(labels)
+    
+    # F1 scores
+    f1_native = f1_score(labels, native_preds, average='macro', zero_division=0)
+    f1_romaji = f1_score(labels, romaji_preds, average='macro', zero_division=0)
+    delta_f1 = abs(f1_native - f1_romaji)
+    
+    # Flip rate
+    flips = (native_preds != romaji_preds).sum()
+    flip_rate = flips / len(labels)
+    
+    # McNemar's test
+    native_correct = (native_preds == labels)
+    romaji_correct = (romaji_preds == labels)
+    
+    both_correct = (native_correct & romaji_correct).sum()
+    native_only = (native_correct & ~romaji_correct).sum()
+    romaji_only = (~native_correct & romaji_correct).sum()
+    both_wrong = (~native_correct & ~romaji_correct).sum()
+    
+    contingency = [[both_correct, native_only],
+                   [romaji_only, both_wrong]]
+    
+    # McNemar's test statistic
+    if native_only + romaji_only > 0:
+        mcnemar_stat = ((abs(native_only - romaji_only) - 1) ** 2) / (native_only + romaji_only)
+        # Chi-square distribution with 1 df
+        from scipy.stats import chi2
+        p_value = 1 - chi2.cdf(mcnemar_stat, df=1)
+    else:
+        mcnemar_stat = 0.0
+        p_value = 1.0
+    
+    return {
+        "f1_native": float(f1_native),
+        "f1_romaji": float(f1_romaji),
+        "delta_f1": float(delta_f1),
+        "flip_rate": float(flip_rate),
+        "num_flips": int(flips),
+        "total_samples": int(len(labels)),
+        "mcnemar": {
+            "statistic": float(mcnemar_stat),
+            "p_value": float(p_value),
+            "significant": bool(p_value < 0.05),
+            "contingency": {
+                "both_correct": int(both_correct),
+                "native_correct_romaji_wrong": int(native_only),
+                "native_wrong_romaji_correct": int(romaji_only),
+                "both_wrong": int(both_wrong),
+            }
+        }
+    }
+
+
+def export_byte_eval_artifacts(
+    export_dir: Path,
+    safe_name: str,
+    spec: ModelSpec,
+    args,
+    data_path: Path,
+    native_checkpoint: Path,
+    romaji_checkpoint: Path,
+):
+    """Export ByT5 checkpoints/configs so evaluation/evaluate_byt5.py can consume them."""
+    export_dir.mkdir(parents=True, exist_ok=True)
+    native_target = export_dir / f"{safe_name}_best_model.pt"
+    romaji_target = export_dir / f"{safe_name}_romaji_best_model.pt"
+    shutil.copy2(native_checkpoint, native_target)
+    shutil.copy2(romaji_checkpoint, romaji_target)
+
+    common_config = {
+        "model_name": spec.name,
+        "max_length": spec.max_length,
+        "batch_size": args.batch_size,
+        "epochs": args.epochs,
+        "learning_rate": args.learning_rate,
+        "test_size": args.test_size,
+        "seed": args.seed,
+        "data_path": str(data_path),
+    }
+    native_config_path = export_dir / "byt5_config.json"
+    romaji_config_path = export_dir / "byt5_romaji_config.json"
+    with open(native_config_path, "w", encoding="utf-8") as f:
+        json.dump({**common_config, "use_romaji": False}, f, indent=2)
+    with open(romaji_config_path, "w", encoding="utf-8") as f:
+        json.dump({**common_config, "use_romaji": True}, f, indent=2)
+
+    print(
+        f"[byte] Exported evaluate_byt5 artifacts to {export_dir} "
+        f"(checkpoints + config JSONs)",
+    )
 
 
 def train_and_compare(args):
@@ -166,50 +267,80 @@ def train_and_compare(args):
     if not data_path.is_absolute():
         data_path = (SCRIPT_DIR / data_path).resolve()
 
-    train_texts, test_texts, train_labels, test_labels = load_data(
+    # Load both native and romaji data for script-invariance testing
+    train_texts_native, test_texts_native, train_labels, test_labels = load_data(
         str(data_path),
-        use_romaji=args.use_romaji,
+        use_romaji=False,
+        test_size=args.test_size,
+    )
+    
+    train_texts_romaji, test_texts_romaji, _, _ = load_data(
+        str(data_path),
+        use_romaji=True,
         test_size=args.test_size,
     )
 
     if args.sample_size:
         rng = random.Random(args.seed)
-        paired_train = list(zip(train_texts, train_labels))
+        paired_train = list(zip(train_texts_native, train_texts_romaji, train_labels))
         rng.shuffle(paired_train)
         paired_train = paired_train[: args.sample_size]
-        train_texts, train_labels = zip(*paired_train) if paired_train else ([], [])
+        train_texts_native, train_texts_romaji, train_labels = zip(*paired_train) if paired_train else ([], [], [])
 
         test_cap = max(10, args.sample_size // 4)
-        paired_test = list(zip(test_texts, test_labels))
+        paired_test = list(zip(test_texts_native, test_texts_romaji, test_labels))
         rng.shuffle(paired_test)
         paired_test = paired_test[:test_cap]
-        test_texts, test_labels = zip(*paired_test) if paired_test else ([], [])
+        test_texts_native, test_texts_romaji, test_labels = zip(*paired_test) if paired_test else ([], [], [])
 
-        train_texts = list(train_texts)
+        train_texts_native = list(train_texts_native)
+        train_texts_romaji = list(train_texts_romaji)
         train_labels = list(train_labels)
-        test_texts = list(test_texts)
+        test_texts_native = list(test_texts_native)
+        test_texts_romaji = list(test_texts_romaji)
         test_labels = list(test_labels)
 
-    specs = [
-        ModelSpec(
-            name=args.subword_model,
-            label="subword",
-            max_length=args.max_length,
-        ),
-        ModelSpec(
-            name=args.byte_model,
-            label="byte",
-            max_length=args.byte_max_length or args.max_length,
-        ),
-    ]
+    selected_models = list(dict.fromkeys([m.lower() for m in args.models]))
+    specs: List[ModelSpec] = []
+    if "subword" in selected_models:
+        specs.append(
+            ModelSpec(
+                name=args.subword_model,
+                label="subword",
+                max_length=args.max_length,
+            )
+        )
+    if "byte" in selected_models:
+        specs.append(
+            ModelSpec(
+                name=args.byte_model,
+                label="byte",
+                max_length=args.byte_max_length or args.max_length,
+            )
+        )
+
+    if not specs:
+        raise ValueError("No models selected. Use --models with 'subword' and/or 'byte'.")
+
+    byte_eval_export_dir = None
+    if args.byte_eval_export_dir:
+        byte_eval_export_dir = Path(args.byte_eval_export_dir).expanduser().resolve()
+        byte_eval_export_dir.mkdir(parents=True, exist_ok=True)
 
     comparison = []
 
     for spec in specs:
+        print(f"\n{'='*80}")
+        print(f"Training {spec.label} model: {spec.name}")
+        print(f"{'='*80}")
+        
         tokenizer = AutoTokenizer.from_pretrained(spec.name)
-        train_loader, test_loader = build_dataloaders(
-            train_texts,
-            test_texts,
+        
+        # Train on NATIVE text
+        print(f"\n[{spec.label}] Training on NATIVE Japanese text...")
+        train_loader_native, test_loader_native = build_dataloaders(
+            train_texts_native,
+            test_texts_native,
             train_labels,
             test_labels,
             tokenizer,
@@ -217,19 +348,19 @@ def train_and_compare(args):
             args.batch_size,
         )
 
-        model = AutoModelForSequenceClassification.from_pretrained(
+        model_native = AutoModelForSequenceClassification.from_pretrained(
             spec.name,
             num_labels=2,
         )
-        model.to(device)
-        optimizer = AdamW(model.parameters(), lr=args.learning_rate)
+        model_native.to(device)
+        optimizer_native = AdamW(model_native.parameters(), lr=args.learning_rate)
 
-        history = []
+        history_native = []
         start_time = time.time()
         for epoch in range(1, args.epochs + 1):
-            train_loss, train_acc = train_epoch(model, train_loader, optimizer, device)
-            val_metrics = evaluate(model, test_loader, device)
-            history.append(
+            train_loss, train_acc = train_epoch(model_native, train_loader_native, optimizer_native, device)
+            val_metrics = evaluate(model_native, test_loader_native, device)
+            history_native.append(
                 {
                     "epoch": epoch,
                     "train_loss": train_loss,
@@ -239,26 +370,117 @@ def train_and_compare(args):
                 }
             )
             print(
-                f"[{spec.label}] Epoch {epoch}/{args.epochs} "
+                f"[{spec.label}-native] Epoch {epoch}/{args.epochs} "
                 f"Train Loss: {train_loss:.4f} Acc: {train_acc:.4f} | "
                 f"Val Loss: {val_metrics['loss']:.4f} Acc: {val_metrics['accuracy']:.4f}"
             )
 
-        elapsed = time.time() - start_time
-        final_metrics = evaluate(model, test_loader, device)
+        elapsed_native = time.time() - start_time
+        final_metrics_native = evaluate(model_native, test_loader_native, device)
 
         safe_name = spec.name.replace("/", "_").replace("-", "_")
-        checkpoint_path = output_dir / f"{safe_name}_{spec.label}_best.pt"
+        checkpoint_path_native = output_dir / f"{safe_name}_{spec.label}_native_best.pt"
         torch.save(
             {
-                "model_state_dict": model.state_dict(),
+                "model_state_dict": model_native.state_dict(),
                 "tokenizer_name": spec.name,
                 "config": vars(args),
-                "history": history,
-                "elapsed_sec": elapsed,
+                "history": history_native,
+                "elapsed_sec": elapsed_native,
             },
-            checkpoint_path,
+            checkpoint_path_native,
         )
+        
+        # Clear GPU memory
+        del model_native
+        del optimizer_native
+        torch.cuda.empty_cache()
+        
+        # Train on ROMAJI text
+        print(f"\n[{spec.label}] Training on ROMAJI text...")
+        train_loader_romaji, test_loader_romaji = build_dataloaders(
+            train_texts_romaji,
+            test_texts_romaji,
+            train_labels,
+            test_labels,
+            tokenizer,
+            spec.max_length,
+            args.batch_size,
+        )
+
+        model_romaji = AutoModelForSequenceClassification.from_pretrained(
+            spec.name,
+            num_labels=2,
+        )
+        model_romaji.to(device)
+        optimizer_romaji = AdamW(model_romaji.parameters(), lr=args.learning_rate)
+
+        history_romaji = []
+        start_time = time.time()
+        for epoch in range(1, args.epochs + 1):
+            train_loss, train_acc = train_epoch(model_romaji, train_loader_romaji, optimizer_romaji, device)
+            val_metrics = evaluate(model_romaji, test_loader_romaji, device)
+            history_romaji.append(
+                {
+                    "epoch": epoch,
+                    "train_loss": train_loss,
+                    "train_accuracy": train_acc,
+                    "val_loss": val_metrics["loss"],
+                    "val_accuracy": val_metrics["accuracy"],
+                }
+            )
+            print(
+                f"[{spec.label}-romaji] Epoch {epoch}/{args.epochs} "
+                f"Train Loss: {train_loss:.4f} Acc: {train_acc:.4f} | "
+                f"Val Loss: {val_metrics['loss']:.4f} Acc: {val_metrics['accuracy']:.4f}"
+            )
+
+        elapsed_romaji = time.time() - start_time
+        final_metrics_romaji = evaluate(model_romaji, test_loader_romaji, device)
+
+        checkpoint_path_romaji = output_dir / f"{safe_name}_{spec.label}_romaji_best.pt"
+        torch.save(
+            {
+                "model_state_dict": model_romaji.state_dict(),
+                "tokenizer_name": spec.name,
+                "config": vars(args),
+                "history": history_romaji,
+                "elapsed_sec": elapsed_romaji,
+            },
+            checkpoint_path_romaji,
+        )
+        
+        # Clear GPU memory before computing metrics
+        del model_romaji
+        del optimizer_romaji
+        torch.cuda.empty_cache()
+
+        if spec.label == "byte" and byte_eval_export_dir:
+            export_byte_eval_artifacts(
+                byte_eval_export_dir,
+                safe_name,
+                spec,
+                args,
+                data_path,
+                checkpoint_path_native,
+                checkpoint_path_romaji,
+            )
+        
+        # Compute script-invariance metrics
+        print(f"\n[{spec.label}] Computing script-invariance metrics...")
+        script_invariance = compute_script_invariance(
+            final_metrics_native["predictions"],
+            final_metrics_romaji["predictions"],
+            test_labels
+        )
+        
+        print(f"\n{spec.label.upper()} Script-Invariance Results:")
+        print(f"  F1-score (Native): {script_invariance['f1_native']:.4f}")
+        print(f"  F1-score (Romaji): {script_invariance['f1_romaji']:.4f}")
+        print(f"  ΔF1 (absolute):    {script_invariance['delta_f1']:.4f}")
+        print(f"  Flip Rate:         {script_invariance['flip_rate']:.4f} ({script_invariance['num_flips']}/{script_invariance['total_samples']} samples)")
+        print(f"  McNemar p-value:   {script_invariance['mcnemar']['p_value']:.4f}")
+        print(f"  Significant:       {'Yes' if script_invariance['mcnemar']['significant'] else 'No'}")
 
         comparison.append(
             {
@@ -267,40 +489,50 @@ def train_and_compare(args):
                 "epochs": args.epochs,
                 "batch_size": args.batch_size,
                 "max_length": spec.max_length,
-                "training_time_sec": elapsed,
-                "history": history,
-                "test_metrics": final_metrics,
-                "checkpoint_path": str(checkpoint_path),
+                "native": {
+                    "training_time_sec": elapsed_native,
+                    "history": history_native,
+                    "test_metrics": final_metrics_native,
+                    "checkpoint_path": str(checkpoint_path_native),
+                },
+                "romaji": {
+                    "training_time_sec": elapsed_romaji,
+                    "history": history_romaji,
+                    "test_metrics": final_metrics_romaji,
+                    "checkpoint_path": str(checkpoint_path_romaji),
+                },
+                "script_invariance": script_invariance,
             }
         )
 
-    summary_path = output_dir / "tokenizer_vs_byt5_results.json"
+    summary_path = output_dir / "tokenizer_vs_byt5_script_invariance.json"
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump({"config": vars(args), "comparison": comparison}, f, indent=2, ensure_ascii=False)
 
-    print("\nComparison complete. Results saved to:")
-    print(f"  {summary_path}")
+    print("\n" + "="*80)
+    print("FINAL COMPARISON - Script-Invariance Metrics")
+    print("="*80)
     for entry in comparison:
-        print(
-            f"  {entry['label']}: Acc={entry['test_metrics']['accuracy']:.4f} "
-            f"Checkpoint={entry['checkpoint_path']}"
-        )
+        print(f"\n{entry['label'].upper()} Model ({entry['model_name']}):")
+        print(f"  Native Accuracy:  {entry['native']['test_metrics']['accuracy']:.4f}")
+        print(f"  Romaji Accuracy:  {entry['romaji']['test_metrics']['accuracy']:.4f}")
+        print(f"  ΔF1:              {entry['script_invariance']['delta_f1']:.4f}")
+        print(f"  Flip Rate:        {entry['script_invariance']['flip_rate']:.4f}")
+        print(f"  McNemar p-value:  {entry['script_invariance']['mcnemar']['p_value']:.4f}")
+        print(f"  Script-Invariant: {'✓ YES' if not entry['script_invariance']['mcnemar']['significant'] else '✗ NO'}")
+    
+    print(f"\nResults saved to: {summary_path}")
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Compare tokenizer-based vs byte-level models for toxicity classification",
+        description="Compare tokenizer-based vs byte-level models for toxicity classification with script-invariance evaluation",
     )
     parser.add_argument(
         "--data-path",
         type=str,
         default=str(DEFAULT_DATA_PATH),
         help="Path to the processed CSV.",
-    )
-    parser.add_argument(
-        "--use-romaji",
-        action="store_true",
-        help="Use the romanized text column instead of native Japanese.",
     )
     parser.add_argument("--epochs", type=int, default=3, help="Number of training epochs per model.")
     parser.add_argument("--batch-size", type=int, default=16, help="Mini-batch size.")
@@ -335,6 +567,18 @@ def parse_args():
         "--sample-size",
         type=int,
         help="Optional cap on training samples (test is scaled automatically).",
+    )
+    parser.add_argument(
+        "--models",
+        nargs="+",
+        choices=["subword", "byte"],
+        default=["subword", "byte"],
+        help="Select which model families to train (default: both).",
+    )
+    parser.add_argument(
+        "--byte-eval-export-dir",
+        type=str,
+        help="Optional directory to store evaluate_byt5.py-compatible ByT5 checkpoints/configs.",
     )
     return parser.parse_args()
 
