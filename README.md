@@ -32,3 +32,13 @@ To exit the virtual environment:
 ```bash
 deactivate
 ```
+
+## Quick Start
+
+See **[QUICK_EVA_REFERENCE.md](QUICK_EVA_REFERENCE.md)** for common commands and quick lookup.
+
+For detailed workflows and all use cases, see **[EVALUATION_WORKFLOW.md](EVALUATION_WORKFLOW.md)** covering:
+- Training all tokenizer models
+- Tokenization diagnostics (Section 7.2.1)
+- Model inference (individual and batch)
+- Error taxonomy statistics (Section 7.2.3)
