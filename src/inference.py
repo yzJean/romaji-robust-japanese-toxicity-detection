@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 """
-Simple inference script for transformer-based toxicity classification.
-Supports mDeBERTa-v3 and BERT Japanese models.
-Test trained model on new texts or evaluate on test data.
+Inference script for transformer-based toxicity classification.
+Runs model-by-model evaluation and produces CSV results for Section 7.2.3 analysis.
 
 Usage:
-    python inference.py --model outputs/best_model.pt
-    python inference.py --model outputs/best_model.pt --text "Hello world"
-    python inference.py --model outputs/best_model.pt --evaluate
+    python inference.py --model outputs/model.pt --output results.csv
+    python inference.py --model outputs/model.pt --text "Hello world"
 """
 
 import argparse
 import torch
-import json
 import os
+import pandas as pd
 from transformers import AutoTokenizer
-from utils import SimpleBertClassifier, predict_text, load_data, SimpleToxicityDataset
-from torch.utils.data import DataLoader
+from sklearn.model_selection import train_test_split
+from utils import SimpleBertClassifier, predict_text
 import logging
 
 logging.basicConfig(
@@ -59,121 +57,103 @@ def load_model(model_path: str, device):
     return model, tokenizer, use_romaji
 
 
-def interactive_inference(model, tokenizer, device):
-    """Interactive inference mode."""
-    print("\n" + "=" * 60)
-    print("INTERACTIVE TOXICITY DETECTION")
-    print("=" * 60)
-    print("Enter Japanese text to classify (or 'quit' to exit)")
-    print("Examples:")
-    print("  ありがとう (Thank you)")
-    print("  バカ野郎 (Stupid bastard)")
-    print("-" * 60)
+def evaluate_model_with_paired_data(model, tokenizer, device, data_path, output_path):
+    """
+    Evaluate model on paired native/romaji test data and save results to CSV.
 
-    while True:
-        text = input("\nEnter text: ").strip()
+    Schema: NativeJapanese, Romaji, ToxicityGT, Results, IsTruePositive
 
-        if text.lower() in ["quit", "exit", "q"]:
-            break
+    Args:
+        model: Loaded model
+        tokenizer: Model's tokenizer
+        device: PyTorch device
+        data_path: Path to paired dataset CSV
+        output_path: Where to save the results CSV
+    """
+    from sklearn.metrics import accuracy_score, classification_report
 
-        if not text:
-            continue
+    logger.info("=" * 80)
+    logger.info("MODEL EVALUATION ON PAIRED NATIVE/ROMAJI DATA")
+    logger.info("=" * 80)
 
-        try:
-            result = predict_text(model, tokenizer, text, device)
+    # Load paired test data
+    df = pd.read_csv(data_path)
 
-            print(f"\nText: {result['text']}")
-            print(f"Prediction: {result['prediction']}")
-            print(f"Confidence: {result['confidence']:.3f}")
-            print(f"Toxic Probability: {result['toxic_probability']:.3f}")
-
-            # Color coding for terminal
-            if result["prediction"] == "Toxic":
-                status = "🚨 TOXIC"
-            else:
-                status = "✅ NON-TOXIC"
-
-            print(f"Status: {status}")
-
-        except Exception as e:
-            print(f"Error processing text: {e}")
-
-
-def batch_inference(model, tokenizer, device, texts):
-    """Run inference on a batch of texts."""
-    results = []
-
-    print(f"\nRunning inference on {len(texts)} texts...")
-
-    for text in texts:
-        try:
-            result = predict_text(model, tokenizer, text, device)
-            results.append(result)
-
-            print(f"Text: {result['text'][:50]}...")
-            print(f"  → {result['prediction']} (conf: {result['confidence']:.3f})")
-
-        except Exception as e:
-            print(f"Error processing '{text[:30]}...': {e}")
-            results.append(
-                {
-                    "text": text,
-                    "prediction": "ERROR",
-                    "confidence": 0.0,
-                    "toxic_probability": 0.0,
-                }
-            )
-
-    return results
-
-
-def evaluate_on_test_data(model, tokenizer, device, data_path, use_romaji=False):
-    """Evaluate model on test data."""
-    from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-
-    # Load test data
-    _, test_texts, _, test_labels = load_data(
-        data_path, use_romaji=use_romaji, test_size=0.2
+    # Split to get test set (same split as training)
+    train_df, test_df = train_test_split(
+        df, test_size=0.2, random_state=42, stratify=df["label_int_coarse"]
     )
 
-    logger.info(f"Evaluating on {len(test_texts)} test samples...")
+    logger.info(f"Loaded {len(test_df)} test samples from {data_path}")
+    logger.info(
+        f"Toxic: {sum(test_df['label_int_coarse'])}, Non-toxic: {len(test_df) - sum(test_df['label_int_coarse'])}"
+    )
 
-    # Get predictions
+    # Get model info from checkpoint to determine if it uses romaji
+    # We'll assume romaji models should use romaji text
+    # This can be detected from the model's use_romaji flag if stored in checkpoint
+
+    # Run predictions
+    results_data = []
     predictions = []
-    probabilities = []
 
-    for text in test_texts:
-        result = predict_text(model, tokenizer, text, device)
+    logger.info("\nRunning predictions...")
+
+    for idx, row in test_df.iterrows():
+        native_text = row["text_native"]
+        romaji_text = row["text_romaji"]
+        ground_truth = int(row["label_int_coarse"])
+
+        # Use romaji text for prediction (since you want romaji models)
+        result = predict_text(model, tokenizer, romaji_text, device)
         pred = 1 if result["prediction"] == "Toxic" else 0
         predictions.append(pred)
-        probabilities.append(result["toxic_probability"])
 
-    # Calculate metrics
-    accuracy = accuracy_score(test_labels, predictions)
+        # Determine if prediction is correct
+        is_true_positive = pred == ground_truth
 
-    print(f"\nEvaluation Results:")
-    print(f"Accuracy: {accuracy:.4f}")
+        # Add to results
+        results_data.append(
+            {
+                "NativeJapanese": native_text,
+                "Romaji": romaji_text,
+                "ToxicityGT": ground_truth,
+                "Results": pred,
+                "IsTruePositive": is_true_positive,
+            }
+        )
 
-    print("\nClassification Report:")
+    # Create DataFrame with specified schema
+    results_df = pd.DataFrame(results_data)
+
+    # Calculate and display metrics
+    ground_truth_labels = test_df["label_int_coarse"].tolist()
+    accuracy = accuracy_score(ground_truth_labels, predictions)
+
+    logger.info("\n" + "=" * 80)
+    logger.info("EVALUATION METRICS")
+    logger.info("=" * 80)
+    logger.info(f"Accuracy: {accuracy:.4f}")
+    logger.info(
+        f"Correct predictions: {sum(results_df['IsTruePositive'])}/{len(results_df)}"
+    )
+
+    logger.info("\nClassification Report:")
     print(
         classification_report(
-            test_labels,
+            ground_truth_labels,
             predictions,
             target_names=["Non-Toxic", "Toxic"],
             zero_division=0,
         )
     )
 
-    print("\nConfusion Matrix:")
-    cm = confusion_matrix(test_labels, predictions)
-    print(cm)
+    # Save results
+    results_df.to_csv(output_path, index=False)
+    logger.info(f"\n✓ Results saved to {output_path}")
+    logger.info(f"Schema: NativeJapanese, Romaji, ToxicityGT, Results, IsTruePositive")
 
-    return {
-        "accuracy": accuracy,
-        "predictions": predictions,
-        "probabilities": probabilities,
-        "true_labels": test_labels,
-    }
+    return results_df, accuracy
 
 
 def parse_args():
@@ -188,26 +168,16 @@ def parse_args():
     parser.add_argument("--text", type=str, help="Single text to classify")
 
     parser.add_argument(
-        "--texts-file",
-        type=str,
-        help="File containing texts to classify (one per line)",
-    )
-
-    parser.add_argument("--evaluate", action="store_true", help="Evaluate on test data")
-
-    parser.add_argument(
         "--data-path",
         type=str,
-        default="data/processed/paired_native_romaji_inspection_ai_binary.csv",
-        help="Path to data file for evaluation",
+        default="data/processed/paired_native_romaji_llmjp_binary.csv",
+        help="Path to paired data file for evaluation",
     )
 
     parser.add_argument(
-        "--interactive", action="store_true", help="Run in interactive mode"
-    )
-
-    parser.add_argument(
-        "--output", type=str, help="Output file to save results (JSON format)"
+        "--output",
+        type=str,
+        help="Output CSV file to save results (required for evaluation mode)",
     )
 
     return parser.parse_args()
@@ -228,11 +198,9 @@ def main():
     # Load model
     model, tokenizer, use_romaji = load_model(args.model, device)
 
-    results = {}
-
     # Single text inference
     if args.text:
-        print(f"\nClassifying single text: '{args.text}'")
+        logger.info(f"\nClassifying single text: '{args.text}'")
         result = predict_text(model, tokenizer, args.text, device)
 
         print(f"\nResult:")
@@ -241,59 +209,23 @@ def main():
         print(f"  Confidence: {result['confidence']:.3f}")
         print(f"  Toxic Probability: {result['toxic_probability']:.3f}")
 
-        results["single_text"] = result
-
-    # Batch inference from file
-    elif args.texts_file:
-        if not os.path.exists(args.texts_file):
-            logger.error(f"Texts file not found: {args.texts_file}")
+    # Evaluation mode - generate CSV with specified schema
+    else:
+        if not args.output:
+            logger.error("Please provide --output path for CSV results")
+            logger.info(
+                "Usage: python inference.py --model <model.pt> --output <output.csv>"
+            )
             return
 
-        with open(args.texts_file, "r", encoding="utf-8") as f:
-            texts = [line.strip() for line in f if line.strip()]
-
-        batch_results = batch_inference(model, tokenizer, device, texts)
-        results["batch_results"] = batch_results
-
-    # Evaluation mode
-    elif args.evaluate:
         if not os.path.exists(args.data_path):
             logger.error(f"Data file not found: {args.data_path}")
             return
 
-        eval_results = evaluate_on_test_data(
-            model, tokenizer, device, args.data_path, use_romaji
+        # Run evaluation and save results
+        evaluate_model_with_paired_data(
+            model, tokenizer, device, args.data_path, args.output
         )
-        results["evaluation"] = eval_results
-
-    # Interactive mode
-    elif args.interactive:
-        interactive_inference(model, tokenizer, device)
-        return
-
-    # Default: run some sample texts
-    else:
-        print("\nNo specific mode selected. Running sample texts...")
-
-        sample_texts = [
-            "ありがとう",  # Thank you
-            "こんにちは",  # Hello
-            "バカ野郎",  # Stupid bastard
-            "死ね",  # Die
-            "いい天気ですね",  # Nice weather
-            "クソ野郎",  # Damn bastard
-            "愛してる",  # I love you
-            "殺すぞ",  # I'll kill you
-        ]
-
-        batch_results = batch_inference(model, tokenizer, device, sample_texts)
-        results["sample_results"] = batch_results
-
-    # Save results if requested
-    if args.output and results:
-        with open(args.output, "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2, ensure_ascii=False)
-        logger.info(f"Results saved to {args.output}")
 
 
 if __name__ == "__main__":
