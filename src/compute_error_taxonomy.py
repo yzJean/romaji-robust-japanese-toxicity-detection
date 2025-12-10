@@ -215,14 +215,14 @@ def compare_models(results_list):
     print()
 
     # False Negatives (Type B)
-    print(f"{'False Negatives':<25}", end="")
+    print(f"{'Missed Toxicity (False Negatives)':<25}", end="")
     for res in results_list:
         pct = res["type_b"] / res["total"] * 100
         print(f"{res['type_b']:>6} ({pct:>5.2f}%){'':<9}", end="")
     print()
 
     # False Positives (Type C)
-    print(f"{'False Positives':<25}", end="")
+    print(f"{'Over-Flagged Non-Toxic (False Positives)':<25}", end="")
     for res in results_list:
         pct = res["type_c"] / res["total"] * 100
         print(f"{res['type_c']:>6} ({pct:>5.2f}%){'':<9}", end="")

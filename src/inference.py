@@ -9,6 +9,7 @@ Usage:
 """
 
 import argparse
+import json
 import torch
 import os
 import pandas as pd
@@ -57,7 +58,15 @@ def load_model(model_path: str, device):
     return model, tokenizer, use_romaji
 
 
-def evaluate_model_with_paired_data(model, tokenizer, device, data_path, output_path):
+def evaluate_model_with_paired_data(
+    model,
+    tokenizer,
+    device,
+    data_path,
+    output_path,
+    language="romaji",
+    report_output=None,
+):
     """
     Evaluate model on paired native/romaji test data and save results to CSV.
 
@@ -104,8 +113,10 @@ def evaluate_model_with_paired_data(model, tokenizer, device, data_path, output_
         romaji_text = row["text_romaji"]
         ground_truth = int(row["label_int_coarse"])
 
-        # Use romaji text for prediction (since you want romaji models)
-        result = predict_text(model, tokenizer, romaji_text, device)
+        # Choose which text to feed the model
+        input_text = romaji_text if language == "romaji" else native_text
+
+        result = predict_text(model, tokenizer, input_text, device)
         pred = 1 if result["prediction"] == "Toxic" else 0
         predictions.append(pred)
 
@@ -139,19 +150,65 @@ def evaluate_model_with_paired_data(model, tokenizer, device, data_path, output_
     )
 
     logger.info("\nClassification Report:")
-    print(
-        classification_report(
-            ground_truth_labels,
-            predictions,
-            target_names=["Non-Toxic", "Toxic"],
-            zero_division=0,
-        )
+    # Print human-readable report
+    report_text = classification_report(
+        ground_truth_labels,
+        predictions,
+        target_names=["Non-Toxic", "Toxic"],
+        zero_division=0,
+    )
+    print(report_text)
+
+    # Also get a serializable dict for saving
+    report_dict = classification_report(
+        ground_truth_labels,
+        predictions,
+        target_names=["Non-Toxic", "Toxic"],
+        output_dict=True,
+        zero_division=0,
     )
 
-    # Save results
+    # Save results CSV
     results_df.to_csv(output_path, index=False)
     logger.info(f"\n✓ Results saved to {output_path}")
     logger.info(f"Schema: NativeJapanese, Romaji, ToxicityGT, Results, IsTruePositive")
+
+    # Save classification report and summary if requested
+    if report_output:
+        report_dir = os.path.dirname(report_output)
+        if report_dir and not os.path.exists(report_dir):
+            os.makedirs(report_dir, exist_ok=True)
+
+        # Write text version (same as printed)
+        txt_path = (
+            report_output if report_output.endswith(".txt") else report_output + ".txt"
+        )
+        with open(txt_path, "w") as ftxt:
+            ftxt.write("Accuracy: {:.6f}\n".format(accuracy))
+            ftxt.write(
+                "Correct: {}/{}\n\n".format(
+                    sum(results_df["IsTruePositive"]), len(results_df)
+                )
+            )
+            ftxt.write(report_text)
+
+        # Write JSON version for programmatic use
+        json_path = (
+            report_output + ".json"
+            if not report_output.endswith(".json")
+            else report_output
+        )
+        summary = {
+            "accuracy": float(accuracy),
+            "correct": int(sum(results_df["IsTruePositive"])),
+            "total": int(len(results_df)),
+            "classification_report": report_dict,
+            "language": language,
+        }
+        with open(json_path, "w") as fj:
+            json.dump(summary, fj, indent=2, ensure_ascii=False)
+
+        logger.info(f"Saved classification report to {txt_path} and {json_path}")
 
     return results_df, accuracy
 
@@ -178,6 +235,21 @@ def parse_args():
         "--output",
         type=str,
         help="Output CSV file to save results (required for evaluation mode)",
+    )
+
+    parser.add_argument(
+        "--language",
+        type=str,
+        choices=["native", "romaji"],
+        default="romaji",
+        help="Which language text to use for prediction (native or romaji)",
+    )
+
+    parser.add_argument(
+        "--report-output",
+        type=str,
+        default=None,
+        help="Optional path (prefix) to write classification report (.txt and .json will be written)",
     )
 
     return parser.parse_args()
@@ -224,7 +296,13 @@ def main():
 
         # Run evaluation and save results
         evaluate_model_with_paired_data(
-            model, tokenizer, device, args.data_path, args.output
+            model,
+            tokenizer,
+            device,
+            args.data_path,
+            args.output,
+            language=args.language,
+            report_output=args.report_output,
         )
 
 

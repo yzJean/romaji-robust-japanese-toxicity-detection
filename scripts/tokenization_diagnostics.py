@@ -77,6 +77,17 @@ def main():
         "--checkpoint",
         help="Optional path to a saved best_model .pt (contains model_state_dict)",
     )
+    parser.add_argument(
+        "--checkpoint-b",
+        dest="checkpoint_b",
+        help="Optional path to a second checkpoint to compare (evaluated on romaji)",
+    )
+    parser.add_argument(
+        "--model-name-b",
+        dest="model_name_b",
+        help="Optional model name for the second checkpoint (defaults to --model-name)",
+        default=None,
+    )
     parser.add_argument("--test-size", type=float, default=0.2)
     parser.add_argument("--max-length", type=int, default=512)
     parser.add_argument("--batch-size", type=int, default=32)
@@ -181,6 +192,13 @@ def main():
         total_unk_romaji / max(1, total_tokens_romaji)
         if total_tokens_romaji > 0
         else 0.0
+    )
+    print("Tokenization Diagnostics:")
+    print(
+        f"  Total tokens native: {total_tokens_native:.2f}, total unk: {total_unk_native} ({oov_rate_native*100:.3f}%)"
+    )
+    print(
+        f"  Total tokens romaji: {total_tokens_romaji:.2f}, total unk: {total_unk_romaji} ({oov_rate_romaji*100:.3f}%)"
     )
 
     # Prepare datasets and dataloaders for model inference
@@ -303,6 +321,78 @@ def main():
             )
         ),
     }
+
+    # Include raw predictions for downstream analysis
+    try:
+        results["preds_native"] = preds_native.tolist()
+    except Exception:
+        results["preds_native"] = None
+    try:
+        results["preds_romaji"] = preds_romaji.tolist()
+    except Exception:
+        results["preds_romaji"] = None
+
+    # If a second checkpoint is provided, load it and evaluate on the romaji set
+    if args.checkpoint_b:
+        model_name_b = (
+            args.model_name_b if args.model_name_b is not None else args.model_name
+        )
+        model_b = SimpleBertClassifier(model_name_b)
+        print(f"Loading second checkpoint from {args.checkpoint_b}")
+        safe_load_checkpoint(model_b, args.checkpoint_b, device)
+        trainer_b = SimpleTrainer(model_b, device)
+        _, acc_b_romaji, preds_b_romaji, labels_b = trainer_b.evaluate(loader_romaji)
+        preds_b_romaji = np.array(preds_b_romaji)
+
+        # Alignment check
+        if len(preds_b_romaji) != len(preds_romaji):
+            raise RuntimeError(
+                "Checkpoint B produced different number of romaji predictions"
+            )
+
+        a_correct = preds_romaji == labels_native
+        b_correct = preds_b_romaji == labels_native
+
+        comp_n00 = int(np.sum(a_correct & b_correct))
+        comp_n01 = int(np.sum(a_correct & (~b_correct)))
+        comp_n10 = int(np.sum((~a_correct) & b_correct))
+        comp_n11 = int(np.sum((~a_correct) & (~b_correct)))
+
+        # Binomial test on disagreements where classifiers disagree about correctness
+        comp_b = comp_n01
+        comp_n = comp_n01 + comp_n10
+        comp_p = None
+        if comp_n > 0:
+            from scipy.stats import binomtest
+
+            comp_res = binomtest(comp_b, comp_n, p=0.5, alternative="two-sided")
+            comp_p = float(comp_res.pvalue)
+
+        results["compare_checkpoints_romaji"] = {
+            "model_a_checkpoint": args.checkpoint,
+            "model_b_checkpoint": args.checkpoint_b,
+            "accuracy_model_a_romaji": float(acc_romaji),
+            "accuracy_model_b_romaji": float(acc_b_romaji),
+            "contingency": {
+                "n00": comp_n00,
+                "n01": comp_n01,
+                "n10": comp_n10,
+                "n11": comp_n11,
+            },
+            "mcnemar_p_value": comp_p,
+            "mcnemar_significant": comp_p < 0.05 if comp_p is not None else None,
+        }
+
+    # Include prediction counts so downstream plotting can compute percentages
+    try:
+        results["n_preds_native"] = int(len(preds_native))
+    except Exception:
+        results["n_preds_native"] = None
+
+    try:
+        results["n_preds_romaji"] = int(len(preds_romaji))
+    except Exception:
+        results["n_preds_romaji"] = None
 
     # Optionally include top-k flip examples for manual inspection
     flip_indices = np.where(flip_mask)[0]
