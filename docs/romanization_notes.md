@@ -7,7 +7,7 @@ The pipeline is **Unicode NFKC** → **pykakasi**. NFKC stabilizes compatibility
 ## Converter config (Week‑1 defaults)
 We enable conversion for H, K, and J to alphabet (`"a"`), choose Hepburn, and keep no spaces / no capitalization:
 
-## Week‑1 policy choices (and why)
+## Policy choices (and why)
 - **Romanization system:** **Hepburn** (most commonly used; friendlier to English‑speaking readers). We may compare Kunrei later.
 - **Separators:** **Off** (`s=False`) for a clean baseline aligned with subword tokenizers. We’ll ablate `s=True` later. (pykakasi’s `s` inserts spaces.)
 - **Capitalization:** **Off** (`C=False`) to avoid case variance in tokens.
