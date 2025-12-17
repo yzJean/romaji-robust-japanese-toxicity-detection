@@ -177,12 +177,40 @@ class SimpleBertClassifier(nn.Module):
 class SimpleTrainer:
     """Simple trainer for quick model verification."""
 
-    def __init__(self, model, device, learning_rate: float = 2e-5, class_weights=None, max_grad_norm: float = 1.0, gradient_accumulation_steps: int = 1):
+    def __init__(self, model, device, learning_rate: float = 2e-5, class_weights=None, max_grad_norm: float = 1.0, gradient_accumulation_steps: int = 1, num_epochs: int = None, num_training_steps: int = None, warmup_ratio: float = 0.0, scheduler_type: str = "none"):
         self.model = model.to(device)
         self.device = device
         self.optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
         self.max_grad_norm = max_grad_norm
         self.gradient_accumulation_steps = gradient_accumulation_steps
+        self.learning_rate = learning_rate
+        self.scheduler = None
+        
+        # Setup learning rate scheduler
+        if scheduler_type != "none" and num_training_steps is not None:
+            from torch.optim.lr_scheduler import LambdaLR
+            
+            warmup_steps = int(num_training_steps * warmup_ratio)
+            
+            if scheduler_type == "linear":
+                def lr_lambda(current_step: int):
+                    if current_step < warmup_steps:
+                        return float(current_step) / float(max(1, warmup_steps))
+                    return max(0.0, float(num_training_steps - current_step) / float(max(1, num_training_steps - warmup_steps)))
+                
+            elif scheduler_type == "cosine":
+                def lr_lambda(current_step: int):
+                    import math
+                    if current_step < warmup_steps:
+                        return float(current_step) / float(max(1, warmup_steps))
+                    progress = float(current_step - warmup_steps) / float(max(1, num_training_steps - warmup_steps))
+                    return max(0.0, 0.5 * (1.0 + math.cos(math.pi * progress)))
+            else:
+                lr_lambda = None
+            
+            if lr_lambda:
+                self.scheduler = LambdaLR(self.optimizer, lr_lambda)
+                logger.info(f"Using {scheduler_type} scheduler with {warmup_ratio*100:.1f}% warmup ({warmup_steps} steps)")
         
         # Apply class weights if provided to handle imbalanced datasets
         if class_weights is not None:
@@ -223,6 +251,8 @@ class SimpleTrainer:
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
                 
                 self.optimizer.step()
+                if self.scheduler:
+                    self.scheduler.step()
                 self.optimizer.zero_grad()
 
             total_loss += loss.item() * self.gradient_accumulation_steps

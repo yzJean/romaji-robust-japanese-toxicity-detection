@@ -144,6 +144,28 @@ def parse_args():
         help="Enable deterministic training (may require setting CUBLAS_WORKSPACE_CONFIG).",
     )
 
+    parser.add_argument(
+        "--warmup-ratio",
+        type=float,
+        default=0.0,
+        help="Warmup ratio (fraction of total steps) for learning rate scheduler",
+    )
+
+    parser.add_argument(
+        "--scheduler",
+        type=str,
+        choices=["linear", "cosine", "none"],
+        default="none",
+        help="Learning rate scheduler type",
+    )
+
+    parser.add_argument(
+        "--max-grad-norm",
+        type=float,
+        default=1.0,
+        help="Maximum gradient norm for clipping (0 to disable)",
+    )
+
     return parser.parse_args()
 
 
@@ -302,18 +324,17 @@ def main():
 
     # Create model
     logger.info("Creating BERT model...")
-    # Use float32 for deterministic mode or ByT5 to avoid NaN issues with mixed precision
-    # ByT5 in float16 can have numerical instability with weighted loss
-    use_float32 = args.deterministic or args.model_type == "byt5"
+    # Use float32 for all models with weighted loss to avoid NaN issues
+    # float16 + weighted loss causes numerical instability across all architectures
+    use_float32 = args.deterministic or True  # Always use float32 with weighted loss
     if use_float32:
         if args.deterministic:
             logger.info(
                 "Deterministic mode enabled: using float32 to avoid numerical instability"
             )
-        if args.model_type == "byt5":
-            logger.info(
-                "ByT5 model: using float32 to avoid NaN loss with weighted loss function"
-            )
+        logger.info(
+            "Using float32 to avoid NaN loss with weighted loss function (applies to all models)"
+        )
     model = SimpleBertClassifier(
         args.model_name, dropout=args.dropout, use_float32=use_float32
     )
@@ -324,12 +345,16 @@ def main():
         learning_rate = 1e-5  # Adjusted from 5e-6 for better convergence
         logger.info(f"ByT5 detected: setting learning rate to {learning_rate} for optimal convergence")
 
-    # Create trainer with class weights and gradient clipping
+    # Create trainer with class weights, gradient clipping, and scheduler
     trainer = SimpleTrainer(
         model, device, learning_rate, 
         class_weights=class_weights, 
-        max_grad_norm=1.0,
-        gradient_accumulation_steps=args.gradient_accumulation_steps
+        max_grad_norm=args.max_grad_norm,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        num_epochs=args.epochs,
+        num_training_steps=len(train_loader) * args.epochs // args.gradient_accumulation_steps,
+        warmup_ratio=args.warmup_ratio,
+        scheduler_type=args.scheduler
     )
 
     # Training loop
