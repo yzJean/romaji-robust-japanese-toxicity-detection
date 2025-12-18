@@ -1,5 +1,8 @@
 latex_build/*
 *.aux
+*.fdb_latexmk
+*.fls
+*.log
 *.DS_Store
 .venv/
 src/__pycache__/*
