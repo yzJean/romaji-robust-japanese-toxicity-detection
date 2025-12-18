@@ -3,6 +3,9 @@
 This is the README for our CSE5525 Final Project.  
 **Group Members**: Jean Lin, Pakhi Chatterjee, Aditya Pandey
 
+## Overview
+This repository compares tokenizer-based and byte-level (ByT5) approaches for Japanese toxicity detection, evaluating models on both native Japanese and romanized (romaji) text. It contains scripts to train models, run inference and evaluations, produce tokenization diagnostics, and compute error-taxonomy statistics.
+
 ## Environment Setup
 
 ### Git LFS (Large File Storage)
@@ -32,3 +35,9 @@ To exit the virtual environment:
 ```bash
 deactivate
 ```
+
+## Quick Start: Running Tokenized Models
+To run these models, checkout to `dev/training-jean` for more details.
+
+## Quick Start: Running ByT5 model
+To run these models, checkout to `dev/training-pakhi` for more details.
