@@ -22,28 +22,13 @@ python3 scripts/tokenization_diagnostics.py \
 
 ### Examples
 ```bash
-# mDeBERTa (native)
-python3 scripts/tokenization_diagnostics.py \
-  --csv data/processed/paired_native_romaji_llmjp_binary.csv \
-  --model-name microsoft/mdeberta-v3-base \
-  --checkpoint outputs/training_romaji/mdeberta_native_best_model.pt \
-  --output outputs/eval/diagnostics_mdeberta_romaji.json
-
-# mDeBERTa (romaji)
+# Tokenization diagnostics (current checkpoint examples)
 python3 scripts/tokenization_diagnostics.py \
   --csv data/processed/paired_native_romaji_llmjp_binary.csv \
   --model-name microsoft/mdeberta-v3-base \
   --checkpoint outputs/training_romaji/mdeberta_romaji_best_model.pt \
   --output outputs/eval/diagnostics_mdeberta_romaji.json
 
-# BERT Japanese (native)
-python3 scripts/tokenization_diagnostics.py \
-  --csv data/processed/paired_native_romaji_llmjp_binary.csv \
-  --model-name tohoku-nlp/bert-base-japanese-v3 \
-  --checkpoint outputs/training_romaji/bert_native_best_model.pt \
-  --output outputs/eval/diagnostics_bert_japanese_romaji.json
-
-# BERT Japanese (romaji)
 python3 scripts/tokenization_diagnostics.py \
   --csv data/processed/paired_native_romaji_llmjp_binary.csv \
   --model-name tohoku-nlp/bert-base-japanese-v3 \
@@ -56,8 +41,17 @@ python3 scripts/tokenization_diagnostics.py \
 # Batch (both BERT + mDeBERTa)
 ./scripts/run_taxonomy_analysis_tokenizer_model.sh
 
-# Individual
+# Individual (generic)
 python src/inference.py --model <model.pt> --output <output.csv>
+
+# Examples: romaji-trained BERT checkpoint — native and romaji evaluations
+python3 src/inference.py \
+  --model outputs/training_romaji/bert_romaji_best_model.pt \
+  --output outputs/eval/bert_romajitrained_nativetest_results.csv --language native
+
+python3 src/inference.py \
+  --model outputs/training_romaji/bert_data_romaji/bert_romaji_best_model.pt \
+  --output outputs/eval/bert_romajitrained_romajitest_results.csv --language romaji
 ```
 
 ### 4. Error Taxonomy
@@ -79,7 +73,7 @@ python src/inference.py --model <model.pt> --output <output.csv>
 
 ### Model Checkpoints
 - `outputs/tokenizer_runs/<run_dir>/<model>_best_model.pt`
-  - Example: `outputs/tokenizer_runs/run_2_model_type_mdeberta_data_path_..._use_romaji/microsoft_mdeberta_v3_base_best_model.pt`
+  - Example: `outputs/tokenizer_runs/run_2_model_type_mdeberta_data_path_..._use_romaji/mdeberta_best_model.pt`
 
 ### Outputs
 - Diagnostics: `outputs/eval/diagnostics_*.json`

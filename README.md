@@ -33,7 +33,7 @@ To exit the virtual environment:
 deactivate
 ```
 
-## Quick Start
+## Quick Start: Running Tokenized Models
 
 See **[QUICK_EVA_REFERENCE.md](QUICK_EVA_REFERENCE.md)** for common commands and quick lookup.
 

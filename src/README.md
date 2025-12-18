@@ -120,30 +120,42 @@ python3 tokenizer_vs_byt5.py --epochs 3
 
 Test single text with mDeBERTa model:
 ```bash
-python3 src/inference.py --model outputs/microsoft_mdeberta_v3_base_best_model.pt --text "ありがとう"
+python3 src/inference.py --model outputs/mdeberta_best_model.pt --text "ありがとう"
 ```
 
 Test single text with BERT Japanese model:
 ```bash
-python3 src/inference.py --model outputs/tohoku_nlp_bert_base_japanese_v3_best_model.pt --text "ありがとう"
+python3 src/inference.py --model outputs/bert_japanese_best_model.pt --text "ありがとう"
 ```
 
 Interactive mode (recommended for testing):
 ```bash
-python3 src/inference.py --model outputs/microsoft_mdeberta_v3_base_best_model.pt --interactive
-python3 src/inference.py --model outputs/tohoku_nlp_bert_base_japanese_v3_best_model.pt --interactive
+python3 src/inference.py --model outputs/mdeberta_best_model.pt --interactive
+python3 src/inference.py --model outputs/bert_japanese_best_model.pt --interactive
 ```
 
 Evaluate on test data:
 ```bash
-python3 src/inference.py --model outputs/microsoft_mdeberta_v3_base_best_model.pt --evaluate
-python3 src/inference.py --model outputs/tohoku_nlp_bert_base_japanese_v3_best_model.pt --evaluate
+python3 src/inference.py --model outputs/mdeberta_best_model.pt --evaluate
+python3 src/inference.py --model outputs/bert_japanese_best_model.pt --evaluate
 ```
 
 Batch inference from file:
 ```bash
-python3 src/inference.py --model outputs/microsoft_mdeberta_v3_base_best_model.pt --texts-file sample_texts.txt
-python3 src/inference.py --model outputs/tohoku_nlp_bert_base_japanese_v3_best_model.pt --texts-file sample_texts.txt
+python3 src/inference.py --model outputs/mdeberta_best_model.pt --texts-file sample_texts.txt
+python3 src/inference.py --model outputs/bert_japanese_best_model.pt --texts-file sample_texts.txt
+```
+
+Additional example — romaji-trained BERT batch inference (save CSV outputs):
+
+```bash
+python3 src/inference.py \
+    --model outputs/training_romaji/bert_data_romaji/bert_romajitrained_best_model.pt \
+    --output outputs/eval/v3-inference-results/bert_romajitrained_nativetest_results.csv --language native
+
+python3 src/inference.py \
+    --model outputs/training_romaji/bert_data_romaji/bert_romajitrained_best_model.pt \
+    --output outputs/eval/v3-inference-results/bert_romajitrained_romajitest_results.csv --language romaji
 ```
 
 ## Supported Models
@@ -192,12 +204,12 @@ python3 src/inference.py --model outputs/tohoku_nlp_bert_base_japanese_v3_best_m
 Training creates model-specific files:
 
 **For mDeBERTa model:**
-- `outputs/microsoft_mdeberta_v3_base_best_model.pt` - mDeBERTa model checkpoint
+- `outputs/mdeberta_best_model.pt` - mDeBERTa model checkpoint
 - `outputs/microsoft_mdeberta_v3_base_results.json` - mDeBERTa training results
 - `outputs/microsoft_mdeberta_v3_base_config.json` - mDeBERTa training configuration
 
 **For BERT Japanese model:**
-- `outputs/tohoku_nlp_bert_base_japanese_v3_best_model.pt` - BERT Japanese model checkpoint
+- `outputs/bert_japanese_best_model.pt` - BERT Japanese model checkpoint
 - `outputs/tohoku_nlp_bert_base_japanese_v3_results.json` - BERT Japanese training results
 - `outputs/tohoku_nlp_bert_base_japanese_v3_config.json` - BERT Japanese training configuration
 
@@ -286,7 +298,7 @@ import torch
 
 # Load mDeBERTa model
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-mdeberta_checkpoint = torch.load('outputs/microsoft_mdeberta_v3_base_best_model.pt',
+mdeberta_checkpoint = torch.load('outputs/mdeberta_best_model.pt',
                                  map_location=device, weights_only=False)
 
 mdeberta_tokenizer = AutoTokenizer.from_pretrained(mdeberta_checkpoint['tokenizer_name'])
@@ -296,7 +308,7 @@ mdeberta_model.to(device)
 mdeberta_model.eval()
 
 # Load BERT Japanese model
-bert_jp_checkpoint = torch.load('outputs/tohoku_nlp_bert_base_japanese_v3_best_model.pt',
+bert_jp_checkpoint = torch.load('outputs/bert_japanese_best_model.pt',
                                 map_location=device, weights_only=False)
 
 bert_jp_tokenizer = AutoTokenizer.from_pretrained(bert_jp_checkpoint['tokenizer_name'])

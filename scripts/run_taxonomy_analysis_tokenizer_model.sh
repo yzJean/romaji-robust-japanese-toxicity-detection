@@ -19,14 +19,14 @@ mkdir -p "$OUTPUT_DIR"
 echo ""
 echo "1. Running mDeBERTa (romaji) model..."
 python src/inference.py \
-  --model outputs/training_romaji/mdeberta_data_romaji_lr_20_15_v/microsoft_mdeberta_v3_base_romaji_best_model.pt \
+  --model outputs/training_romaji/mdeberta_data_romaji/microsoft_mdeberta_v3_base_romaji_best_model.pt \
   --data-path "$DATA_PATH" \
   --output "$OUTPUT_DIR/mdeberta_romaji_results.csv"
 
 echo ""
 echo "2. Running BERT Japanese (romaji) model..."
 python src/inference.py \
-  --model outputs/training_romaji/bert_data_romaji_lr_20_15_v/tohoku_nlp_bert_base_japanese_v3_romaji_best_model.pt \
+  --model outputs/training_romaji/bert_data_romaji/bert_romajitrained_best_model.pt \
   --data-path "$DATA_PATH" \
   --output "$OUTPUT_DIR/bert_romaji_results.csv"
 

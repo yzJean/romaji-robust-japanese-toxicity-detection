@@ -66,7 +66,7 @@ python3 scripts/tokenization_diagnostics.py \
 python3 scripts/tokenization_diagnostics.py \
   --csv data/processed/paired_native_romaji_llmjp_binary.csv \
   --model-name microsoft/mdeberta-v3-base \
-  --checkpoint outputs/tokenizer_runs/run_1_model_type_mdeberta_data_path_data_processed_paired_native_romaji_llmjp_binary_csv/microsoft_mdeberta_v3_base_best_model.pt \
+  --checkpoint outputs/tokenizer_runs/run_1_model_type_mdeberta_data_path_data_processed_paired_native_romaji_llmjp_binary_csv/mdeberta_best_model.pt \
   --output outputs/eval/diagnostics_mdeberta_native.json
 ```
 
@@ -75,7 +75,7 @@ python3 scripts/tokenization_diagnostics.py \
 python3 scripts/tokenization_diagnostics.py \
   --csv data/processed/paired_native_romaji_llmjp_binary.csv \
   --model-name microsoft/mdeberta-v3-base \
-  --checkpoint outputs/training_romaji/mdeberta_data_romaji_lr_20_15_v/microsoft_mdeberta_v3_base_romaji_best_model.pt \
+  --checkpoint outputs/training_romaji/mdeberta_data_romaji/microsoft_mdeberta_v3_base_romaji_best_model.pt \
   --output outputs/eval/diagnostics_mdeberta_romaji.json
 ```
 
@@ -84,7 +84,7 @@ python3 scripts/tokenization_diagnostics.py \
 python3 scripts/tokenization_diagnostics.py \
   --csv data/processed/paired_native_romaji_llmjp_binary.csv \
   --model-name tohoku-nlp/bert-base-japanese-v3 \
-  --checkpoint outputs/tokenizer_runs/run_3_model_type_bert_japanese_data_path_data_processed_paired_native_romaji_llmjp_binary_csv/tohoku_nlp_bert_base_japanese_v3_best_model.pt \
+  --checkpoint outputs/tokenizer_runs/bert_japanese_best_model.pt \
   --output outputs/eval/diagnostics_bert_japanese_native.json
 ```
 
@@ -93,7 +93,7 @@ python3 scripts/tokenization_diagnostics.py \
 python3 scripts/tokenization_diagnostics.py \
   --csv data/processed/paired_native_romaji_llmjp_binary.csv \
   --model-name tohoku-nlp/bert-base-japanese-v3 \
-  --checkpoint outputs/training_romaji/bert_data_romaji_lr_20_15_v/tohoku_nlp_bert_base_japanese_v3_romaji_best_model.pt \
+  --checkpoint outputs/training_romaji/bert_data_romaji/bert_romajitrained_best_model.pt \
   --output outputs/eval/diagnostics_bert_japanese_romaji.json
 ```
 
@@ -132,14 +132,14 @@ python src/inference.py \
 #### mDeBERTa (Romaji)
 ```bash
 python src/inference.py \
-  --model outputs/training_romaji/mdeberta_data_romaji_lr_20_15_v/microsoft_mdeberta_v3_base_romaji_best_model.pt \
+  --model outputs/training_romaji/mdeberta_data_romaji/microsoft_mdeberta_v3_base_romaji_best_model.pt \
   --output outputs/eval/mdeberta_romaji_results.csv
 ```
 
 #### BERT Japanese (Romaji)
 ```bash
 python src/inference.py \
-  --model outputs/training_romaji/bert_data_romaji_lr_20_15_v/tohoku_nlp_bert_base_japanese_v3_romaji_best_model.pt \
+  --model outputs/training_romaji/bert_data_romaji/bert_romajitrained_best_model.pt \
   --output outputs/eval/bert_romaji_results.csv
 ```
 
@@ -276,13 +276,13 @@ FULL=1 ./scripts/run_tokenizer_models.sh
 python3 scripts/tokenization_diagnostics.py \
   --csv data/processed/paired_native_romaji_llmjp_binary.csv \
   --model-name microsoft/mdeberta-v3-base \
-  --checkpoint outputs/<run_dir>/microsoft_mdeberta_v3_base_best_model.pt \
+  --checkpoint outputs/<run_dir>/mdeberta_best_model.pt \
   --output outputs/eval/diagnostics_mdeberta_romaji.json
 
 python3 scripts/tokenization_diagnostics.py \
   --csv data/processed/paired_native_romaji_llmjp_binary.csv \
   --model-name tohoku-nlp/bert-base-japanese-v3 \
-  --checkpoint outputs/training_romaji/bert_data_romaji_lr_20_15_v/tohoku_nlp_bert_base_japanese_v3_romaji_best_model.pt \
+  --checkpoint outputs/training_romaji/bert_data_romaji/bert_romajitrained_best_model.pt \
   --output outputs/eval/diagnostics_bert_japanese_romaji.json
 
 # Step 3: Generate inference results
